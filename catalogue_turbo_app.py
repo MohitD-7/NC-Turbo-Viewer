@@ -237,27 +237,36 @@ st.markdown("""
         display: none !important;
     }
 
-    /* IRONCLAD STATIC LEFT PANEL */
-    /* Target the first column and make it stick to the top */
+    /* IRONCLAD FIXED LEFT PANEL - SEPARATE ENTITY */
+    /* Target the first column and FIX it to the viewport */
     [data-testid="column"]:nth-of-type(1) {
-        position: sticky !important;
-        top: 2rem !important;
-        height: min-content !important;
-        align-self: start !important;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 20% !important; /* Fixed width for the sidebar */
+        height: 100vh !important;
+        background: white !important;
+        padding: 2rem 1.5rem !important;
+        border-right: 1px solid #e2e8f0 !important;
         z-index: 1000 !important;
+        overflow-y: auto !important;
     }
     
-    /* Ensure the column content itself doesn't cause unexpected scrolling */
-    [data-testid="column"]:nth-of-type(1) > div {
-        max-height: 90vh;
-        overflow-y: auto;
-    }
-    
-    /* Remove any previous fixed position overrides that might conflict */
+    /* Ensure the vertical block inside the fixed column takes full width */
     [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
-        position: relative !important;
         width: 100% !important;
-        height: auto !important;
+    }
+    
+    /* OFFSET THE MAIN CONTENT AREA - Prevent overlap */
+    [data-testid="column"]:nth-of-type(2) {
+        margin-left: 22% !important; /* Slightly more than sidebar width for spacing */
+        width: 78% !important;
+        padding-top: 1rem !important;
+    }
+
+    /* Remove the default sidebar entirely from DOM visibility */
+    section[data-testid="stSidebar"] {
+        display: none !important;
     }
 </style>
 
