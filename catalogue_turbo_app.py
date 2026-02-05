@@ -212,52 +212,72 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
 
-    /* Aggressively Hide ONLY the GitHub/Fork buttons and Footer */
+    /* IRONCLAD: Hide the entire Streamlit Header (Removes GitHub, Fork, and Toolbar) */
+    header[data-testid="stHeader"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+    
+    /* REMOVE BRANDING: Hide Menu and Footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display:none !important;}
     
-    /* Target GitHub/Fork specifically by their titles */
-    button[title="View on GitHub"], 
-    button[title="Fork this app"],
+    /* FAIL-SAFE: Target specific elements if they escape the header hide */
     [data-testid="stStatusWidget"],
-    .viewerBadge_container__1QSob {
+    .viewerBadge_container__1QSob,
+    button[title="View on GitHub"], 
+    button[title="Fork this app"] {
         display: none !important;
     }
 
-    /* FORCED VISIBILITY FOR SIDEBAR ARROW */
-    [data-testid="stSidebarCollapse"] {
+    /* CUSTOM SIDEBAR TOGGLE: Fix it to the top-left corner above everything */
+    button[data-testid="stSidebarCollapse"] {
         visibility: visible !important;
         display: flex !important;
-        background-color: white !important;
+        position: fixed !important;
+        top: 12px !important;
+        left: 12px !important;
+        z-index: 9999999 !important;
+        background-color: #ffffff !important;
         border: 2px solid #1e40af !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
         border-radius: 8px !important;
-        z-index: 999999 !important;
+        padding: 4px !important;
+        transition: all 0.2s ease !important;
     }
     
-    [data-testid="stSidebarCollapse"] svg {
-        fill: #1e40af !important;
-        width: 30px !important;
-        height: 30px !important;
+    button[data-testid="stSidebarCollapse"]:hover {
+        background-color: #eff6ff !important;
+        transform: scale(1.05);
     }
-
-    /* Ensure the header doesn't block the button */
-    header[data-testid="stHeader"] {
-        background: transparent !important;
+    
+    button[data-testid="stSidebarCollapse"] svg {
+        fill: #1e40af !important;
+        width: 24px !important;
+        height: 24px !important;
     }
 </style>
 
 <script>
-// Fail-safe to remove branding if CSS is bypassed
-const hideBranding = () => {
+// Ironclad fail-safe to keep branding hidden and handle resize/re-renders
+const ironcladClean = () => {
+    // Hide header again just in case Streamlit re-adds it
+    const header = document.querySelector('header[data-testid="stHeader"]');
+    if(header) header.style.display = 'none';
+    
+    // Specifically target pesky buttons
     const selectors = ['button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton'];
     selectors.forEach(s => {
-        const el = document.querySelector(s);
-        if(el) el.style.display = 'none';
-        if(el) el.style.visibility = 'hidden';
+        const els = document.querySelectorAll(s);
+        els.forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+        });
     });
 };
-setInterval(hideBranding, 1000);
+// Run frequently to catch any dynamic UI changes
+setInterval(ironcladClean, 500);
 </script>
 """, unsafe_allow_html=True)
 
