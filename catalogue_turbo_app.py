@@ -237,18 +237,27 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Style the permanent left column filters - FIXED POSITION */
-    [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
-        position: fixed;
-        width: 18%;
-        height: 100vh;
-        overflow-y: auto;
-        padding-right: 15px;
+    /* IRONCLAD STATIC LEFT PANEL */
+    /* Target the first column and make it stick to the top */
+    [data-testid="column"]:nth-of-type(1) {
+        position: sticky !important;
+        top: 2rem !important;
+        height: min-content !important;
+        align-self: start !important;
+        z-index: 1000 !important;
     }
     
-    /* Offset the right column so it doesn't get hidden under the fixed left column */
-    [data-testid="column"]:nth-of-type(2) {
-        margin-left: 22%;
+    /* Ensure the column content itself doesn't cause unexpected scrolling */
+    [data-testid="column"]:nth-of-type(1) > div {
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+    
+    /* Remove any previous fixed position overrides that might conflict */
+    [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
+        position: relative !important;
+        width: 100% !important;
+        height: auto !important;
     }
 </style>
 
