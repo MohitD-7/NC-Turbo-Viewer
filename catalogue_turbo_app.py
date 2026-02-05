@@ -223,7 +223,7 @@ st.markdown("""
     footer {visibility: hidden;}
     .stDeployButton {display:none !important;}
     
-    /* FAIL-SAFE: Target specific elements if they escape the header hide */
+    /* FALL-SAFE: Target specific elements if they escape the header hide */
     [data-testid="stStatusWidget"],
     .viewerBadge_container__1QSob,
     button[title="View on GitHub"], 
@@ -231,38 +231,37 @@ st.markdown("""
         display: none !important;
     }
 
-    /* PERMANENTLY HIDE SIDEBAR TOGGLE / COLLAPSE BUTTONS */
-    [data-testid="stSidebarCollapse"],
-    button[data-testid="stSidebarCollapse"],
-    div[data-testid="stSidebarCollapse"] {
+    /* PERMANENT SIDEBAR: Hide only the CLOSE button so it can't be tucked away */
+    section[data-testid="stSidebar"] [data-testid="stSidebarCollapse"] {
         display: none !important;
-        visibility: hidden !important;
-        opacity: 0 !important;
-        pointer-events: none !important;
     }
 </style>
 
 <script>
-// Ironclad fail-safe to keep branding and toggle hidden
+// Ironclad fail-safe to keep branding hidden and FORCE sidebar open
 const ironcladClean = () => {
-    // Hide header
+    // 1. Hide header/branding
     const header = document.querySelector('header[data-testid="stHeader"]');
     if(header) header.style.display = 'none';
     
-    // Hide sidebar collapse buttons
-    const toggles = document.querySelectorAll('button[data-testid="stSidebarCollapse"]');
-    toggles.forEach(t => t.style.display = 'none');
-    
-    // Specifically target pesky buttons
     const selectors = ['button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton'];
     selectors.forEach(s => {
         const els = document.querySelectorAll(s);
-        els.forEach(el => {
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
-        });
+        els.forEach(el => { el.style.display = 'none'; el.style.visibility = 'hidden'; });
     });
+
+    // 2. FORCE SIDEBAR OPEN: Find the "Expand" button in the main area and click it
+    // In Streamlit, when collapsed, the expand button is usually in the main section or header
+    const mainArea = document.querySelector('section[data-testid="stMain"]');
+    if (mainArea) {
+        const expandButton = mainArea.querySelector('button[data-testid="stSidebarCollapse"]');
+        if (expandButton) {
+            expandButton.click();
+        }
+    }
 };
+
+// Run frequently to ensure the sidebar stays open and branding stays hidden
 setInterval(ironcladClean, 500);
 </script>
 """, unsafe_allow_html=True)
@@ -324,7 +323,7 @@ if color != "All":
 # Main Content - Premium Header
 st.markdown("""
 <div class="hero-container">
-    <div class="hero-title">NorthCape Image Library <span style="font-size: 0.8rem; vertical-align: middle; opacity: 0.3;">v1.2</span></div>
+    <div class="hero-title">NorthCape Image Library <span style="font-size: 0.8rem; vertical-align: middle; opacity: 0.3;">v1.3</span></div>
 </div>
 """, unsafe_allow_html=True)
 
