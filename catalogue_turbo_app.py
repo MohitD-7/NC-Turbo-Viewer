@@ -308,23 +308,25 @@ paged_data = filtered_df.iloc[start_idx:end_idx]
 grid_html = '<div class="card-grid">'
 
 for i, (_, item) in enumerate(paged_data.iterrows()):
-    # Optimized Image Priority
+    # Indestructible Image Loading: Try Local -> Fallback to Dropbox
+    dropbox_src = ""
+    for j in range(1, 16):
+        url_key = f"{market_col_prefix} {j}"
+        if pd.notna(item.get(url_key)) and item[url_key]:
+            dropbox_src = str(item[url_key]).replace("dl=0", "raw=1").replace("dl=1", "raw=1")
+            break
+            
     img_src = ""
     local_thumb = item.get("Local_Thumbnail")
-    
     if pd.notna(local_thumb) and local_thumb:
-        # Robust path: Extract filename and use static serving
-        # Handle both relative 'thumbnails/foo.jpg' and absolute 'C:/.../thumbnails/foo.jpg'
         thumb_filename = os.path.basename(str(local_thumb))
-        img_src = f"/app/static/thumbnails/{thumb_filename}"
-    
-    # Fallback URL if local fails
-    if not img_src:
-        for j in range(1, 16):
-            url_key = f"{market_col_prefix} {j}"
-            if pd.notna(item.get(url_key)) and item[url_key]:
-                img_src = str(item[url_key]).replace("dl=0", "raw=1").replace("dl=1", "raw=1")
-                break
+        # Use relative path for maximum compatibility
+        img_src = f"app/static/thumbnails/{thumb_filename}"
+    else:
+        img_src = dropbox_src
+
+    # Fail-safe handler: If local image fails, swap to dropbox instantly
+    onerror_attr = f'onerror="this.onerror=null;this.src=\'{dropbox_src}\';"' if dropbox_src else ""
 
     # Card Content
     color_display = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{item["Color"]}</a>' if pd.notna(item.get('Color_Link')) else item["Color"]
@@ -342,7 +344,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
-                f'<img src="{img_src}" alt="Product">'
+                f'<img src="{img_src}" {onerror_attr} alt="Product">'
             f'</div>'
             f'<div class="card-footer">'
                 f'<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">{item["Type"]}</span></div>'
