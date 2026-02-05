@@ -237,11 +237,18 @@ st.markdown("""
         display: none !important;
     }
 
-    /* Style the permanent left column filters */
-    div[data-testid="column"] {
-        background: white;
-        padding: 10px;
-        border-radius: 12px;
+    /* Style the permanent left column filters - FIXED POSITION */
+    [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
+        position: fixed;
+        width: 18%;
+        height: 100vh;
+        overflow-y: auto;
+        padding-right: 15px;
+    }
+    
+    /* Offset the right column so it doesn't get hidden under the fixed left column */
+    [data-testid="column"]:nth-of-type(2) {
+        margin-left: 22%;
     }
 </style>
 
@@ -324,7 +331,7 @@ with right_col:
     # Main Content - Premium Header
     st.markdown("""
     <div class="hero-container">
-        <div class="hero-title">NorthCape Image Library <span style="font-size: 0.8rem; vertical-align: middle; opacity: 0.3;">v1.4</span></div>
+        <div class="hero-title">NorthCape Image Library</div>
     </div>
     """, unsafe_allow_html=True)
     
