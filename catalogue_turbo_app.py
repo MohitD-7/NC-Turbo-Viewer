@@ -212,25 +212,25 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
 
-    /* IRONCLAD FIXED SIDEBAR - TRULY SEPARATE ENTITY */
-    #fixed-filters {
-        position: fixed !important;
-        top: 0 !important;
-        left: 0 !important;
-        width: 300px !important;
-        height: 100vh !important;
+    /* IRONCLAD STATIC LEFT PANEL - COMPATIBLE WITH STREAMLIT */
+    /* Target the first column specifically */
+    [data-testid="column"]:nth-of-type(1) {
+        position: sticky !important;
+        top: 2rem !important;
+        height: calc(100vh - 4rem) !important;
+        z-index: 1000 !important;
         background: white !important;
-        padding: 2rem 1.5rem !important;
+        padding: 1.5rem !important;
         border-right: 1px solid #e2e8f0 !important;
-        z-index: 9999 !important;
-        overflow-y: auto !important;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.05) !important;
+        border-radius: 12px !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.03) !important;
+        align-self: start !important;
     }
     
-    #main-portal {
-        margin-left: 320px !important; /* Space for the 300px sidebar + gap */
-        width: calc(100% - 320px) !important;
-        padding: 1rem 2rem !important;
+    /* Ensure the content inside is visible and handles overflow */
+    [data-testid="column"]:nth-of-type(1) > div {
+        overflow-y: auto !important;
+        height: 100% !important;
     }
 
     /* Hide the default Streamlit Sidebar and Header entirely */
@@ -238,11 +238,6 @@ st.markdown("""
     header[data-testid="stHeader"] {
         display: none !important;
         visibility: hidden !important;
-    }
-
-    /* Ensure the app container doesn't counteract the fixed position */
-    .stApp {
-        overflow: visible !important;
     }
 </style>
 
@@ -256,7 +251,7 @@ const ironcladClean = () => {
         els.forEach(el => { el.style.display = 'none'; el.style.visibility = 'hidden'; });
     });
 
-    // 2. LIVE SEARCH RELAY: Listen for typing and trigger Streamlit update
+    // 2. LIVE SEARCH RELAY
     const searchInput = document.querySelector('input[placeholder*="Search Part Number"]');
     if (searchInput && !searchInput.dataset.hasListener) {
         searchInput.dataset.hasListener = "true";
@@ -264,19 +259,9 @@ const ironcladClean = () => {
         searchInput.addEventListener('input', (e) => {
             clearTimeout(timeout);
             timeout = setTimeout(() => {
-                // Simulate Enter key to trigger Streamlit's text_input update
-                const event = new KeyboardEvent('keydown', {
-                    key: 'Enter',
-                    code: 'Enter',
-                    which: 13,
-                    keyCode: 13,
-                    bubbles: true
-                });
+                const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
                 searchInput.dispatchEvent(event);
-                // Also blur to be safe
-                searchInput.blur();
-                searchInput.focus();
-            }, 600); // 600ms debounce to prevent lag
+            }, 600);
         });
     }
 };
@@ -308,7 +293,6 @@ def get_options(column, filtered_df):
     return ["All"] + sorted([str(x) for x in unique if x])
 
 with left_col:
-    st.markdown('<div id="fixed-filters">', unsafe_allow_html=True)
     st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
     # Market Selector
     selected_market = st.selectbox("CHANNEL", ["Northcape", "Overstock", "Wayfair", "Home Depot"])
@@ -346,10 +330,8 @@ with left_col:
     page = st.number_input("PAGE", min_value=1, max_value=total_pages, value=1)
     
     st.markdown(f'<div style="color: #64748b; font-size: 0.8rem; padding-top: 1rem;">Showing {len(filtered_df)} records</div>', unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
 
 with right_col:
-    st.markdown('<div id="main-portal">', unsafe_allow_html=True)
     # Main Content - Premium Header
     st.markdown("""
     <div class="hero-container">
@@ -434,4 +416,3 @@ with right_col:
     
     grid_html += '</div>'
     st.markdown(grid_html, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
