@@ -212,17 +212,49 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
 
-    /* Hide Streamlit Branding/Menu but KEEP Sidebar Toggle */
+    /* Aggressively Hide GitHub Branding, Fork Buttons, and Streamlit UI */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display:none;}
-    [data-testid="stToolbarContent"] {display: none;}
+    header[data-testid="stHeader"] {background: transparent !important;}
+    
+    /* Target the specific GitHub/Fork icons and menus */
+    button[title="View on GitHub"], 
+    button[title="Fork this app"],
+    [data-testid="stStatusWidget"],
+    .viewerBadge_container__1QSob,
+    .viewerBadge_link__1Su_k {
+        display: none !important;
+        visibility: hidden !important;
+    }
     
     /* Ensure the sidebar arrow is visible and styled blue to match NC theme */
+    [data-testid="stSidebarCollapse"] {
+        top: 10px !important;
+        left: 10px !important;
+        background-color: white !important;
+        border-radius: 50% !important;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+    }
     [data-testid="stSidebarCollapse"] svg {
         fill: #1e40af !important;
     }
+
+    /* Hide the top-right toolbar completely if possible */
+    [data-testid="stToolbar"] {display: none !important;}
 </style>
+
+<script>
+// Fail-safe to remove branding if CSS is bypassed
+const hideBranding = () => {
+    const selectors = ['button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton'];
+    selectors.forEach(s => {
+        const el = document.querySelector(s);
+        if(el) el.style.display = 'none';
+    });
+};
+setInterval(hideBranding, 1000);
+</script>
 """, unsafe_allow_html=True)
 
 # Data Loading with Caching
