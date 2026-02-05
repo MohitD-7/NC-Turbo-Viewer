@@ -233,9 +233,13 @@ st.markdown("""
         height: 100% !important;
     }
 
-    /* Hide the default Streamlit Sidebar and Header entirely */
+    /* Hide the default Streamlit Sidebar, Header, and Branding entirely */
     section[data-testid="stSidebar"],
-    header[data-testid="stHeader"] {
+    header[data-testid="stHeader"],
+    .viewerBadge_container__1QSob,
+    [data-testid="stStatusWidget"],
+    #MainMenu, 
+    footer {
         display: none !important;
         visibility: hidden !important;
     }
@@ -245,7 +249,7 @@ st.markdown("""
 // LIVE SEARCH & UI GUARD
 const ironcladClean = () => {
     // 1. Force hide branding
-    const selectors = ['header[data-testid="stHeader"]', 'section[data-testid="stSidebar"]', 'button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton'];
+    const selectors = ['header[data-testid="stHeader"]', 'section[data-testid="stSidebar"]', 'button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton', '.viewerBadge_container__1QSob', '#MainMenu', 'footer'];
     selectors.forEach(s => {
         const els = document.querySelectorAll(s);
         els.forEach(el => { el.style.display = 'none'; el.style.visibility = 'hidden'; });
