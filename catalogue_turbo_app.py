@@ -231,40 +231,27 @@ st.markdown("""
         display: none !important;
     }
 
-    /* CUSTOM SIDEBAR TOGGLE: Fix it to the top-left corner above everything */
-    button[data-testid="stSidebarCollapse"] {
-        visibility: visible !important;
-        display: flex !important;
-        position: fixed !important;
-        top: 12px !important;
-        left: 12px !important;
-        z-index: 9999999 !important;
-        background-color: #ffffff !important;
-        border: 2px solid #1e40af !important;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
-        border-radius: 8px !important;
-        padding: 4px !important;
-        transition: all 0.2s ease !important;
-    }
-    
-    button[data-testid="stSidebarCollapse"]:hover {
-        background-color: #eff6ff !important;
-        transform: scale(1.05);
-    }
-    
-    button[data-testid="stSidebarCollapse"] svg {
-        fill: #1e40af !important;
-        width: 24px !important;
-        height: 24px !important;
+    /* PERMANENTLY HIDE SIDEBAR TOGGLE / COLLAPSE BUTTONS */
+    [data-testid="stSidebarCollapse"],
+    button[data-testid="stSidebarCollapse"],
+    div[data-testid="stSidebarCollapse"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
     }
 </style>
 
 <script>
-// Ironclad fail-safe to keep branding hidden and handle resize/re-renders
+// Ironclad fail-safe to keep branding and toggle hidden
 const ironcladClean = () => {
-    // Hide header again just in case Streamlit re-adds it
+    // Hide header
     const header = document.querySelector('header[data-testid="stHeader"]');
     if(header) header.style.display = 'none';
+    
+    // Hide sidebar collapse buttons
+    const toggles = document.querySelectorAll('button[data-testid="stSidebarCollapse"]');
+    toggles.forEach(t => t.style.display = 'none');
     
     // Specifically target pesky buttons
     const selectors = ['button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton'];
@@ -276,7 +263,6 @@ const ironcladClean = () => {
         });
     });
 };
-// Run frequently to catch any dynamic UI changes
 setInterval(ironcladClean, 500);
 </script>
 """, unsafe_allow_html=True)
