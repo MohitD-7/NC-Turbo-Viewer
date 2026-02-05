@@ -161,12 +161,11 @@ st.markdown("""
         text-decoration: underline;
     }
     
-    /* Custom Scrollbar */
     ::-webkit-scrollbar {
-        width: 8px;
+        width: 6px;
     }
     ::-webkit-scrollbar-track {
-        background: #f1f5f9;
+        background: transparent;
     }
     ::-webkit-scrollbar-thumb {
         background: #cbd5e1;
@@ -224,20 +223,29 @@ st.markdown("""
     [data-testid="column"]:nth-of-type(1) {
         height: 100vh !important;
         overflow-y: auto !important;
+        overflow-x: hidden !important;
         background: white !important;
-        padding: 2rem 1.25rem !important;
+        padding: 1.5rem 1rem !important;
         border-right: 1px solid #e2e8f0 !important;
         z-index: 1000 !important;
         box-shadow: 2px 0 15px rgba(0,0,0,0.02) !important;
-        flex: 0 0 300px !important; /* Fixed width for filters */
-        min-width: 300px !important;
+        flex: 0 0 280px !important;
+        min-width: 280px !important;
+        scrollbar-width: thin;
+        scrollbar-color: #cbd5e1 transparent;
+    }
+    
+    /* Custom scrollbar just for the left panel to ensure it's visible */
+    [data-testid="column"]:nth-of-type(1)::-webkit-scrollbar {
+        width: 4px !important;
+        display: block !important;
     }
     
     /* Target the Product Grid: Give it its own scroll area */
     [data-testid="column"]:nth-of-type(2) {
         height: 100vh !important;
         overflow-y: auto !important;
-        padding: 1.5rem 2.5rem !important;
+        padding: 1rem 2rem !important;
         flex: 1 !important;
     }
 
