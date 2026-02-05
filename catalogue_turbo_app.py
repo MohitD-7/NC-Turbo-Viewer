@@ -215,33 +215,35 @@ st.markdown("""
     /* Aggressively Hide GitHub Branding, Fork Buttons, and Streamlit UI */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    .stDeployButton {display:none;}
-    header[data-testid="stHeader"] {background: transparent !important;}
+    .stDeployButton {display:none !important;}
     
-    /* Target the specific GitHub/Fork icons and menus */
-    button[title="View on GitHub"], 
-    button[title="Fork this app"],
+    /* Target the specific GitHub/Fork icons and menus precisely */
     [data-testid="stStatusWidget"],
     .viewerBadge_container__1QSob,
-    .viewerBadge_link__1Su_k {
+    .viewerBadge_link__1Su_k,
+    button[title="View on GitHub"], 
+    button[title="Fork this app"] {
         display: none !important;
-        visibility: hidden !important;
     }
     
-    /* Ensure the sidebar arrow is visible and styled blue to match NC theme */
+    /* FORCE THE SIDEBAR ARROW TO BE VISIBLE */
     [data-testid="stSidebarCollapse"] {
-        top: 10px !important;
-        left: 10px !important;
-        background-color: white !important;
-        border-radius: 50% !important;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        visibility: visible !important;
+        display: block !important;
+        z-index: 999991 !important;
     }
+    
+    /* Style the arrow blue to match NC theme */
     [data-testid="stSidebarCollapse"] svg {
         fill: #1e40af !important;
+        width: 28px !important;
+        height: 28px !important;
     }
 
-    /* Hide the top-right toolbar completely if possible */
-    [data-testid="stToolbar"] {display: none !important;}
+    /* Hide the rest of the header decorations */
+    [data-testid="stHeader"] > div:first-child {
+        display: none !important;
+    }
 </style>
 
 <script>
