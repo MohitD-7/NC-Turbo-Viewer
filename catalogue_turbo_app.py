@@ -324,7 +324,7 @@ if color != "All":
 # Main Content - Premium Header
 st.markdown("""
 <div class="hero-container">
-    <div class="hero-title">NorthCape Image Library</div>
+    <div class="hero-title">NorthCape Image Library <span style="font-size: 0.8rem; vertical-align: middle; opacity: 0.3;">v1.2</span></div>
 </div>
 """, unsafe_allow_html=True)
 
