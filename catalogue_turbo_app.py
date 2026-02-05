@@ -211,6 +211,14 @@ st.markdown("""
         letter-spacing: -0.01em;
         margin-bottom: 0.75rem;
     }
+
+    /* Aggressively Hide Streamlit Branding/Menu/GitHub Buttons */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stDeployButton {display:none;}
+    [data-testid="stSidebarNav"] {display: none;}
+    [data-testid="stHeader"] {display: none;}
 </style>
 """, unsafe_allow_html=True)
 
