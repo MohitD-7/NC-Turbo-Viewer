@@ -16,6 +16,13 @@ st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
     
+    /* White-labeling: Hide Streamlit Branding & Menus */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    footer {visibility: hidden;}
+    [data-testid="stToolbar"] {visibility: hidden !important;}
+    [data-testid="stSidebarCollapseButton"] {display: none !important;}
+    
     .stApp {
         background-color: #f8fafc;
         font-family: 'Inter', sans-serif;
