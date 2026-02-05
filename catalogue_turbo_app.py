@@ -212,50 +212,38 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
 
-    /* Aggressively Hide GitHub Branding, Fork Buttons, and Streamlit UI */
+    /* Aggressively Hide ONLY the GitHub/Fork buttons and Footer */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     .stDeployButton {display:none !important;}
     
-    /* Target the specific GitHub/Fork icons and menus precisely */
-    [data-testid="stStatusWidget"],
-    .viewerBadge_container__1QSob,
-    .viewerBadge_link__1Su_k,
+    /* Target GitHub/Fork specifically by their titles */
     button[title="View on GitHub"], 
     button[title="Fork this app"],
-    [data-testid="stToolbar"] {
+    [data-testid="stStatusWidget"],
+    .viewerBadge_container__1QSob {
         display: none !important;
     }
-    
-    /* FORCE THE SIDEBAR ARROW TO BE VISIBLE AND ACCESSIBLE */
-    /* We move it out of the header flow and fix it to the top-left */
-    button[data-testid="stSidebarCollapse"] {
+
+    /* FORCED VISIBILITY FOR SIDEBAR ARROW */
+    [data-testid="stSidebarCollapse"] {
         visibility: visible !important;
         display: flex !important;
-        position: fixed !important;
-        top: 15px !important;
-        left: 15px !important;
-        z-index: 999999 !important;
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        background-color: white !important;
+        border: 2px solid #1e40af !important;
         border-radius: 8px !important;
+        z-index: 999999 !important;
     }
     
-    /* Style the arrow icon itself */
-    button[data-testid="stSidebarCollapse"] svg {
+    [data-testid="stSidebarCollapse"] svg {
         fill: #1e40af !important;
-        width: 24px !important;
-        height: 24px !important;
+        width: 30px !important;
+        height: 30px !important;
     }
 
-    /* Make the transparent header not block clicks to the button */
+    /* Ensure the header doesn't block the button */
     header[data-testid="stHeader"] {
         background: transparent !important;
-        pointer-events: none !important;
-    }
-    header[data-testid="stHeader"] * {
-        pointer-events: auto !important;
     }
 </style>
 
@@ -266,6 +254,7 @@ const hideBranding = () => {
     selectors.forEach(s => {
         const el = document.querySelector(s);
         if(el) el.style.display = 'none';
+        if(el) el.style.visibility = 'hidden';
     });
 };
 setInterval(hideBranding, 1000);
