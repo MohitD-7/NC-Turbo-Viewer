@@ -161,11 +161,12 @@ st.markdown("""
         text-decoration: underline;
     }
     
+    /* Custom Scrollbar */
     ::-webkit-scrollbar {
-        width: 6px;
+        width: 8px;
     }
     ::-webkit-scrollbar-track {
-        background: transparent;
+        background: #f1f5f9;
     }
     ::-webkit-scrollbar-thumb {
         background: #cbd5e1;
@@ -173,6 +174,23 @@ st.markdown("""
     }
     ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
+    }
+
+    /* Hide Sidebar Collapse Button & Streamlit Branding */
+    [data-testid="collapsedControl"], 
+    header[data-testid="stHeader"], 
+    footer {
+        display: none !important;
+    }
+    
+    /* Ensure Sidebar stays visible and clean */
+    [data-testid="stSidebar"] {
+        min-width: 300px !important;
+        max-width: 300px !important;
+    }
+
+    [data-testid="stSidebarNav"] {
+        display: none;
     }
 
     /* Highlighted Search Bar (Match Reference) */
@@ -210,83 +228,7 @@ st.markdown("""
         letter-spacing: -0.01em;
         margin-bottom: 0.75rem;
     }
-
-    /* IRONCLAD STATIC LEFT PANEL - COMPATIBLE WITH STREAMLIT */
-    /* DUAL-SCROLL ARCHITECTURE: Truly Stagnant Sidebar */
-    /* Lock the main container so the whole page doesn't scroll */
-    .stApp, .block-container {
-        height: 100vh !important;
-        overflow: hidden !important;
-    }
-    
-    /* Target the Left Panel: Make it stationary and independent */
-    [data-testid="column"]:nth-of-type(1) {
-        height: 100vh !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        background: white !important;
-        padding: 1.5rem 1rem !important;
-        border-right: 1px solid #e2e8f0 !important;
-        z-index: 1000 !important;
-        box-shadow: 2px 0 15px rgba(0,0,0,0.02) !important;
-        flex: 0 0 280px !important;
-        min-width: 280px !important;
-        scrollbar-width: thin;
-        scrollbar-color: #cbd5e1 transparent;
-    }
-    
-    /* Custom scrollbar just for the left panel to ensure it's visible */
-    [data-testid="column"]:nth-of-type(1)::-webkit-scrollbar {
-        width: 4px !important;
-        display: block !important;
-    }
-    
-    /* Target the Product Grid: Give it its own scroll area */
-    [data-testid="column"]:nth-of-type(2) {
-        height: 100vh !important;
-        overflow-y: auto !important;
-        padding: 1rem 2rem !important;
-        flex: 1 !important;
-    }
-
-    /* Hide the default Streamlit Sidebar, Header, and Branding entirely */
-    section[data-testid="stSidebar"],
-    header[data-testid="stHeader"],
-    .viewerBadge_container__1QSob,
-    [data-testid="stStatusWidget"],
-    #MainMenu, 
-    footer {
-        display: none !important;
-        visibility: hidden !important;
-    }
 </style>
-
-<script>
-// LIVE SEARCH & UI GUARD
-const ironcladClean = () => {
-    // 1. Force hide branding
-    const selectors = ['header[data-testid="stHeader"]', 'section[data-testid="stSidebar"]', 'button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton', '.viewerBadge_container__1QSob', '#MainMenu', 'footer'];
-    selectors.forEach(s => {
-        const els = document.querySelectorAll(s);
-        els.forEach(el => { el.style.display = 'none'; el.style.visibility = 'hidden'; });
-    });
-
-    // 2. LIVE SEARCH RELAY
-    const searchInput = document.querySelector('input[placeholder*="Search Part Number"]');
-    if (searchInput && !searchInput.dataset.hasListener) {
-        searchInput.dataset.hasListener = "true";
-        let timeout = null;
-        searchInput.addEventListener('input', (e) => {
-            clearTimeout(timeout);
-            timeout = setTimeout(() => {
-                const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
-                searchInput.dispatchEvent(event);
-            }, 600);
-        });
-    }
-};
-setInterval(ironcladClean, 500);
-</script>
 """, unsafe_allow_html=True)
 
 # Data Loading with Caching
@@ -304,135 +246,133 @@ def load_data():
 
 data = load_data()
 
-# Create Main Columns ([1, 4] ratio for permanent left filters)
-left_col, right_col = st.columns([1, 4], gap="large")
+# Sidebar - Filtering
+st.sidebar.title("")
+selected_market = st.sidebar.selectbox("CHANNEL", ["Northcape", "Overstock", "Wayfair", "Home Depot"])
+
+st.sidebar.divider()
 
 # Cascaded Filter Logic (Turbo Speed)
 def get_options(column, filtered_df):
     unique = filtered_df[column].unique().tolist()
     return ["All"] + sorted([str(x) for x in unique if x])
 
-with left_col:
-    st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
-    # Market Selector
-    selected_market = st.selectbox("CHANNEL", ["Northcape", "Overstock", "Wayfair", "Home Depot"])
-    
-    df = pd.DataFrame(data)
-    
-    # Safety check for empty data or missing columns
-    if df.empty or "Collection Type" not in df.columns:
-        st.error("⚠️ Catalogue data is missing or corrupted.")
-        st.stop()
+df = pd.DataFrame(data)
 
-    # Filtering State
-    col_type = st.selectbox("COLLECTION TYPE", get_options("Collection Type", df))
-    filtered_df = df[df["Collection Type"] == col_type] if col_type != "All" else df
-    
-    col_name = st.selectbox("COLLECTION", get_options("Collection", filtered_df))
-    if col_name != "All":
-        filtered_df = filtered_df[filtered_df["Collection"] == col_name]
-    
-    arm = st.selectbox("ARM/TABLE-TOP", get_options("Arm/Table-Top", filtered_df))
-    if arm != "All":
-        filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
-    
-    product = st.selectbox("PRODUCT", get_options("Product", filtered_df))
-    if product != "All":
-        filtered_df = filtered_df[filtered_df["Product"] == product]
-    
-    color = st.selectbox("COLOR", get_options("Color", filtered_df))
-    if color != "All":
-        filtered_df = filtered_df[filtered_df["Color"] == color]
-        
-    # Pagination in left column
-    items_per_page = 25
-    total_pages = max(1, (len(filtered_df) - 1) // items_per_page + 1)
-    page = st.number_input("PAGE", min_value=1, max_value=total_pages, value=1)
-    
-    st.markdown(f'<div style="color: #64748b; font-size: 0.8rem; padding-top: 1rem;">Showing {len(filtered_df)} records</div>', unsafe_allow_html=True)
+# Safety check for empty data or missing columns
+if df.empty or "Collection Type" not in df.columns:
+    st.error("⚠️ Catalogue data is missing or corrupted. Please run the update script.")
+    st.sidebar.error("Data Load Error")
+    st.stop()
 
-with right_col:
-    # Main Content - Premium Header
-    st.markdown("""
-    <div class="hero-container">
-        <div class="hero-title">NorthCape Image Library</div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Search Bar (Match Reference)
-    search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
-    if search_query:
-        q = search_query.lower()
-        # Search across all relevant text-based columns
-        searchable_cols = [c for c in filtered_df.columns if not c.endswith("Image") and c != "Local_Thumbnail" and c != "Color_Link"]
-        mask = filtered_df[searchable_cols].apply(
-            lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1
-        )
-        filtered_df = filtered_df[mask]
+# Filtering State
+col_type = st.sidebar.selectbox("Collection Type", get_options("Collection Type", df))
+filtered_df = df[df["Collection Type"] == col_type] if col_type != "All" else df
 
-    market_col_prefix = {
-        "Northcape": "Northcape Image",
-        "Overstock": "Overstock Image",
-        "Wayfair": "Wayfair Image",
-        "Home Depot": "Home Depot Image"
-    }[selected_market]
+col_name = st.sidebar.selectbox("Collection", get_options("Collection", filtered_df))
+if col_name != "All":
+    filtered_df = filtered_df[filtered_df["Collection"] == col_name]
+
+arm = st.sidebar.selectbox("Arm/Table-Top", get_options("Arm/Table-Top", filtered_df))
+if arm != "All":
+    filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
+
+product = st.sidebar.selectbox("Product", get_options("Product", filtered_df))
+if product != "All":
+    filtered_df = filtered_df[filtered_df["Product"] == product]
+
+color = st.sidebar.selectbox("Color", get_options("Color", filtered_df))
+if color != "All":
+    filtered_df = filtered_df[filtered_df["Color"] == color]
+
+# Main Content - Premium Header
+st.markdown("""
+<div class="hero-container">
+    <div class="hero-title">NorthCape Image Library</div>
+</div>
+""", unsafe_allow_html=True)
+
+# Search Bar (Match Reference)
+search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
+if search_query:
+    q = search_query.lower()
+    # Search across all relevant text-based columns
+    searchable_cols = [c for c in filtered_df.columns if not c.endswith("Image") and c != "Local_Thumbnail" and c != "Color_Link"]
+    mask = filtered_df[searchable_cols].apply(
+        lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1
+    )
+    filtered_df = filtered_df[mask]
+
+st.caption(f"Showing {len(filtered_df)} records")
+
+# Pagination
+items_per_page = 25 # Increased for dynamic layout (multiple of 5)
+total_pages = max(1, (len(filtered_df) - 1) // items_per_page + 1)
+page = st.sidebar.number_input("Page", min_value=1, max_value=total_pages, value=1)
+start_idx = (page - 1) * items_per_page
+end_idx = start_idx + items_per_page
+
+market_col_prefix = {
+    "Northcape": "Northcape Image",
+    "Overstock": "Overstock Image",
+    "Wayfair": "Wayfair Image",
+    "Home Depot": "Home Depot Image"
+}[selected_market]
+
+paged_data = filtered_df.iloc[start_idx:end_idx]
+
+# Start of the responsive grid
+grid_html = '<div class="card-grid">'
+
+for i, (_, item) in enumerate(paged_data.iterrows()):
+    # Indestructible Image Loading: Try Local -> Fallback to Dropbox
+    dropbox_src = ""
+    for j in range(1, 16):
+        url_key = f"{market_col_prefix} {j}"
+        if pd.notna(item.get(url_key)) and item[url_key]:
+            dropbox_src = str(item[url_key]).replace("dl=0", "raw=1").replace("dl=1", "raw=1")
+            break
+            
+    img_src = ""
+    local_thumb = item.get("Local_Thumbnail")
+    if pd.notna(local_thumb) and local_thumb:
+        thumb_filename = os.path.basename(str(local_thumb))
+        # Use relative path for maximum compatibility
+        img_src = f"app/static/thumbnails/{thumb_filename}"
+    else:
+        img_src = dropbox_src
+
+    # Fail-safe handler: If local image fails, swap to dropbox instantly
+    onerror_attr = f'onerror="this.onerror=null;this.src=\'{dropbox_src}\';"' if dropbox_src else ""
+
+    # Card Content
+    color_display = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{item["Color"]}</a>' if pd.notna(item.get('Color_Link')) else item["Color"]
     
-    start_idx = (page - 1) * items_per_page
-    end_idx = start_idx + items_per_page
-    paged_data = filtered_df.iloc[start_idx:end_idx]
-    
-    # Start of the responsive grid
-    grid_html = '<div class="card-grid">'
-    
-    for i, (_, item) in enumerate(paged_data.iterrows()):
-        # Indestructible Image Loading: Try Local -> Fallback to Dropbox
-        dropbox_src = ""
-        for j in range(1, 16):
-            url_key = f"{market_col_prefix} {j}"
-            if pd.notna(item.get(url_key)) and item[url_key]:
-                dropbox_src = str(item[url_key]).replace("dl=0", "raw=1").replace("dl=1", "raw=1")
-                break
-                
-        img_src = ""
-        local_thumb = item.get("Local_Thumbnail")
-        if pd.notna(local_thumb) and local_thumb:
-            thumb_filename = os.path.basename(str(local_thumb))
-            # Use relative path for maximum compatibility
-            img_src = f"app/static/thumbnails/{thumb_filename}"
-        else:
-            img_src = dropbox_src
-    
-        # Fail-safe handler: If local image fails, swap to dropbox instantly
-        onerror_attr = f'onerror="this.onerror=null;this.src=\'{dropbox_src}\';"' if dropbox_src else ""
-    
-        # Card Content
-        color_display = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{item["Color"]}</a>' if pd.notna(item.get('Color_Link')) else item["Color"]
-        
-        panel_html = ""
-        if pd.notna(item.get('Panel')) and item['Panel']:
-            panel_html = f'<div class="detail-row"><span class="detail-label">Panel</span><span class="detail-value">{item["Panel"]}</span></div>'
-    
-        # Build card HTML without any leading whitespace to avoid markdown code blocks
-        card_html = (
-            f'<div class="product-card">'
-                f'<div class="card-header">'
-                    f'<div class="badge">{item["Collection Type"]}</div>'
-                    f'<div class="part-number">{item["Part Number"]}</div>'
-                    f'<div class="collection-text">{item["Collection"]}</div>'
-                f'</div>'
-                f'<div class="image-container">'
-                    f'<img src="{img_src}" {onerror_attr} alt="Product">'
-                f'</div>'
-                f'<div class="card-footer">'
-                    f'<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">{item["Type"]}</span></div>'
-                    f'<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">{item["Product"]}</span></div>'
-                    f'<div class="detail-row"><span class="detail-label">Color</span><span class="detail-value">{color_display}</span></div>'
-                    f'<div class="detail-row"><span class="detail-label">Arm</span><span class="detail-value">{item.get("Arm/Table-Top", "N/A")}</span></div>'
-                    f'{panel_html}'
-                f'</div>'
+    panel_html = ""
+    if pd.notna(item.get('Panel')) and item['Panel']:
+        panel_html = f'<div class="detail-row"><span class="detail-label">Panel</span><span class="detail-value">{item["Panel"]}</span></div>'
+
+    # Build card HTML without any leading whitespace to avoid markdown code blocks
+    card_html = (
+        f'<div class="product-card">'
+            f'<div class="card-header">'
+                f'<div class="badge">{item["Collection Type"]}</div>'
+                f'<div class="part-number">{item["Part Number"]}</div>'
+                f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
-        )
-        grid_html += card_html
-    
-    grid_html += '</div>'
-    st.markdown(grid_html, unsafe_allow_html=True)
+            f'<div class="image-container">'
+                f'<img src="{img_src}" {onerror_attr} alt="Product">'
+            f'</div>'
+            f'<div class="card-footer">'
+                f'<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">{item["Type"]}</span></div>'
+                f'<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">{item["Product"]}</span></div>'
+                f'<div class="detail-row"><span class="detail-label">Color</span><span class="detail-value">{color_display}</span></div>'
+                f'<div class="detail-row"><span class="detail-label">Arm</span><span class="detail-value">{item.get("Arm/Table-Top", "N/A")}</span></div>'
+                f'{panel_html}'
+            f'</div>'
+        f'</div>'
+    )
+    grid_html += card_html
+
+grid_html += '</div>'
+st.markdown(grid_html, unsafe_allow_html=True)

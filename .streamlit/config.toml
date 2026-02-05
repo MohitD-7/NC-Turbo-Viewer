@@ -3,4 +3,7 @@ enableStaticServing = true
 
 [client]
 toolbarMode = "minimal"
-showTopBar = true
+showErrorDetails = false
+
+[ui]
+hideSidebarNav = true
