@@ -222,27 +222,40 @@ st.markdown("""
     .viewerBadge_container__1QSob,
     .viewerBadge_link__1Su_k,
     button[title="View on GitHub"], 
-    button[title="Fork this app"] {
+    button[title="Fork this app"],
+    [data-testid="stToolbar"] {
         display: none !important;
     }
     
-    /* FORCE THE SIDEBAR ARROW TO BE VISIBLE */
-    [data-testid="stSidebarCollapse"] {
+    /* FORCE THE SIDEBAR ARROW TO BE VISIBLE AND ACCESSIBLE */
+    /* We move it out of the header flow and fix it to the top-left */
+    button[data-testid="stSidebarCollapse"] {
         visibility: visible !important;
-        display: block !important;
-        z-index: 999991 !important;
+        display: flex !important;
+        position: fixed !important;
+        top: 15px !important;
+        left: 15px !important;
+        z-index: 999999 !important;
+        background-color: #ffffff !important;
+        border: 1px solid #e2e8f0 !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+        border-radius: 8px !important;
     }
     
-    /* Style the arrow blue to match NC theme */
-    [data-testid="stSidebarCollapse"] svg {
+    /* Style the arrow icon itself */
+    button[data-testid="stSidebarCollapse"] svg {
         fill: #1e40af !important;
-        width: 28px !important;
-        height: 28px !important;
+        width: 24px !important;
+        height: 24px !important;
     }
 
-    /* Hide the rest of the header decorations */
-    [data-testid="stHeader"] > div:first-child {
-        display: none !important;
+    /* Make the transparent header not block clicks to the button */
+    header[data-testid="stHeader"] {
+        background: transparent !important;
+        pointer-events: none !important;
+    }
+    header[data-testid="stHeader"] * {
+        pointer-events: auto !important;
     }
 </style>
 
