@@ -212,72 +212,73 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
 
-    /* IRONCLAD: Hide the entire Streamlit Header AND SideBar */
-    header[data-testid="stHeader"], 
-    section[data-testid="stSidebar"] {
-        display: none !important;
-        visibility: hidden !important;
-    }
-    
-    /* REMOVE BRANDING: Hide Menu and Footer */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
-    .stDeployButton {display:none !important;}
-    
-    /* Adjust Main Content to take full width since sidebar is hidden */
-    .stMain {
-        margin-left: 0 !important;
-    }
-    
-    /* FALL-SAFE: Target specific elements if they escape the header hide */
-    [data-testid="stStatusWidget"],
-    .viewerBadge_container__1QSob,
-    button[title="View on GitHub"], 
-    button[title="Fork this app"] {
-        display: none !important;
-    }
-
-    /* IRONCLAD FIXED LEFT PANEL - SEPARATE ENTITY */
-    /* Target the first column and FIX it to the viewport */
-    [data-testid="column"]:nth-of-type(1) {
+    /* IRONCLAD FIXED SIDEBAR - TRULY SEPARATE ENTITY */
+    #fixed-filters {
         position: fixed !important;
         top: 0 !important;
         left: 0 !important;
-        width: 20% !important; /* Fixed width for the sidebar */
+        width: 300px !important;
         height: 100vh !important;
         background: white !important;
         padding: 2rem 1.5rem !important;
         border-right: 1px solid #e2e8f0 !important;
-        z-index: 1000 !important;
+        z-index: 9999 !important;
         overflow-y: auto !important;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.05) !important;
     }
     
-    /* Ensure the vertical block inside the fixed column takes full width */
-    [data-testid="column"]:nth-of-type(1) [data-testid="stVerticalBlock"] {
-        width: 100% !important;
-    }
-    
-    /* OFFSET THE MAIN CONTENT AREA - Prevent overlap */
-    [data-testid="column"]:nth-of-type(2) {
-        margin-left: 22% !important; /* Slightly more than sidebar width for spacing */
-        width: 78% !important;
-        padding-top: 1rem !important;
+    #main-portal {
+        margin-left: 320px !important; /* Space for the 300px sidebar + gap */
+        width: calc(100% - 320px) !important;
+        padding: 1rem 2rem !important;
     }
 
-    /* Remove the default sidebar entirely from DOM visibility */
-    section[data-testid="stSidebar"] {
+    /* Hide the default Streamlit Sidebar and Header entirely */
+    section[data-testid="stSidebar"],
+    header[data-testid="stHeader"] {
         display: none !important;
+        visibility: hidden !important;
+    }
+
+    /* Ensure the app container doesn't counteract the fixed position */
+    .stApp {
+        overflow: visible !important;
     }
 </style>
 
 <script>
-// Ironclad fail-safe to keep branding hidden
+// LIVE SEARCH & UI GUARD
 const ironcladClean = () => {
+    // 1. Force hide branding
     const selectors = ['header[data-testid="stHeader"]', 'section[data-testid="stSidebar"]', 'button[title="View on GitHub"]', 'button[title="Fork this app"]', '.stDeployButton'];
     selectors.forEach(s => {
         const els = document.querySelectorAll(s);
         els.forEach(el => { el.style.display = 'none'; el.style.visibility = 'hidden'; });
     });
+
+    // 2. LIVE SEARCH RELAY: Listen for typing and trigger Streamlit update
+    const searchInput = document.querySelector('input[placeholder*="Search Part Number"]');
+    if (searchInput && !searchInput.dataset.hasListener) {
+        searchInput.dataset.hasListener = "true";
+        let timeout = null;
+        searchInput.addEventListener('input', (e) => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => {
+                // Simulate Enter key to trigger Streamlit's text_input update
+                const event = new KeyboardEvent('keydown', {
+                    key: 'Enter',
+                    code: 'Enter',
+                    which: 13,
+                    keyCode: 13,
+                    bubbles: true
+                });
+                searchInput.dispatchEvent(event);
+                // Also blur to be safe
+                searchInput.blur();
+                searchInput.focus();
+            }, 600); // 600ms debounce to prevent lag
+        });
+    }
 };
 setInterval(ironcladClean, 500);
 </script>
@@ -307,6 +308,7 @@ def get_options(column, filtered_df):
     return ["All"] + sorted([str(x) for x in unique if x])
 
 with left_col:
+    st.markdown('<div id="fixed-filters">', unsafe_allow_html=True)
     st.markdown('<div style="height: 1rem;"></div>', unsafe_allow_html=True)
     # Market Selector
     selected_market = st.selectbox("CHANNEL", ["Northcape", "Overstock", "Wayfair", "Home Depot"])
@@ -344,8 +346,10 @@ with left_col:
     page = st.number_input("PAGE", min_value=1, max_value=total_pages, value=1)
     
     st.markdown(f'<div style="color: #64748b; font-size: 0.8rem; padding-top: 1rem;">Showing {len(filtered_df)} records</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
 with right_col:
+    st.markdown('<div id="main-portal">', unsafe_allow_html=True)
     # Main Content - Premium Header
     st.markdown("""
     <div class="hero-container">
@@ -430,3 +434,4 @@ with right_col:
     
     grid_html += '</div>'
     st.markdown(grid_html, unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
