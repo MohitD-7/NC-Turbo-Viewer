@@ -3,5 +3,4 @@ enableStaticServing = true
 
 [client]
 toolbarMode = "minimal"
-showTopBar = false
-showSidebarNavigation = false
+showTopBar = true

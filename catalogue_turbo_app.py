@@ -212,13 +212,16 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
 
-    /* Aggressively Hide Streamlit Branding/Menu/GitHub Buttons */
+    /* Hide Streamlit Branding/Menu but KEEP Sidebar Toggle */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    header {visibility: hidden;}
     .stDeployButton {display:none;}
-    [data-testid="stSidebarNav"] {display: none;}
-    [data-testid="stHeader"] {display: none;}
+    [data-testid="stToolbarContent"] {display: none;}
+    
+    /* Ensure the sidebar arrow is visible and styled blue to match NC theme */
+    [data-testid="stSidebarCollapse"] svg {
+        fill: #1e40af !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
