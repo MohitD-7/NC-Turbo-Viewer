@@ -1,0 +1,12 @@
+__pycache__/
+.streamlit/
+.gemini/
+*.xlsx
+*.pyc
+.ipynb_checkpoints/
+.vscode/
+.idea/
+data/catalogue.json.bak
+# Keep the static/thumbnails and data/catalogue.json for deployment
+!data/catalogue.json
+!static/thumbnails/
