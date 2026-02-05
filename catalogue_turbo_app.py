@@ -213,24 +213,32 @@ st.markdown("""
     }
 
     /* IRONCLAD STATIC LEFT PANEL - COMPATIBLE WITH STREAMLIT */
-    /* Target the first column specifically */
-    [data-testid="column"]:nth-of-type(1) {
-        position: sticky !important;
-        top: 2rem !important;
-        height: calc(100vh - 4rem) !important;
-        z-index: 1000 !important;
-        background: white !important;
-        padding: 1.5rem !important;
-        border-right: 1px solid #e2e8f0 !important;
-        border-radius: 12px !important;
-        box-shadow: 2px 0 10px rgba(0,0,0,0.03) !important;
-        align-self: start !important;
+    /* DUAL-SCROLL ARCHITECTURE: Truly Stagnant Sidebar */
+    /* Lock the main container so the whole page doesn't scroll */
+    .stApp, .block-container {
+        height: 100vh !important;
+        overflow: hidden !important;
     }
     
-    /* Ensure the content inside is visible and handles overflow */
-    [data-testid="column"]:nth-of-type(1) > div {
+    /* Target the Left Panel: Make it stationary and independent */
+    [data-testid="column"]:nth-of-type(1) {
+        height: 100vh !important;
         overflow-y: auto !important;
-        height: 100% !important;
+        background: white !important;
+        padding: 2rem 1.25rem !important;
+        border-right: 1px solid #e2e8f0 !important;
+        z-index: 1000 !important;
+        box-shadow: 2px 0 15px rgba(0,0,0,0.02) !important;
+        flex: 0 0 300px !important; /* Fixed width for filters */
+        min-width: 300px !important;
+    }
+    
+    /* Target the Product Grid: Give it its own scroll area */
+    [data-testid="column"]:nth-of-type(2) {
+        height: 100vh !important;
+        overflow-y: auto !important;
+        padding: 1.5rem 2.5rem !important;
+        flex: 1 !important;
     }
 
     /* Hide the default Streamlit Sidebar, Header, and Branding entirely */
