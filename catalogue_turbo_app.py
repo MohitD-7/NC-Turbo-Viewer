@@ -263,7 +263,9 @@ st.sidebar.divider()
 # Cascaded Filter Logic (Turbo Speed)
 def get_options(column, filtered_df):
     unique = filtered_df[column].unique().tolist()
-    return ["All"] + sorted([str(x) for x in unique if x])
+    # Filter out nan, None, and empty strings strictly
+    valid_options = [str(x) for x in unique if pd.notna(x) and x != "" and str(x).lower() != "nan"]
+    return ["All"] + sorted(list(set(valid_options)))
 
 df = pd.DataFrame(data)
 
