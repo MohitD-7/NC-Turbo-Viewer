@@ -287,7 +287,7 @@ if df.empty or "Collection Type" not in df.columns:
     st.stop()
 
 # Filtering State
-col_type = st.sidebar.selectbox("Collection Type", get_options("Collection Type", df))
+col_type = st.sidebar.selectbox("Type", get_options("Collection Type", df))
 filtered_df = df[df["Collection Type"] == col_type] if col_type != "All" else df
 
 col_name = st.sidebar.selectbox("Collection", get_options("Collection", filtered_df))
