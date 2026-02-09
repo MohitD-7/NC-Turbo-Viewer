@@ -298,6 +298,12 @@ arm = st.sidebar.selectbox("Arm/Table-Top", get_options("Arm/Table-Top", filtere
 if arm != "All":
     filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
 
+panel_opts = get_options("Panel", filtered_df)
+if len(panel_opts) > 1: # Only show if there are actual options besides "All"
+    panel = st.sidebar.selectbox("Panel", panel_opts)
+    if panel != "All":
+        filtered_df = filtered_df[filtered_df["Panel"] == panel]
+
 product = st.sidebar.selectbox("Product", get_options("Product", filtered_df))
 if product != "All":
     filtered_df = filtered_df[filtered_df["Product"] == product]
