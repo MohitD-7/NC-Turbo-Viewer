@@ -287,9 +287,14 @@ if df.empty or "Collection Type" not in df.columns:
     st.stop()
 
 # Filtering State
-# User requested only "Furniture" for now
+# User requested only "Furniture" for now, matched against the 'Type' column
 col_type = st.sidebar.selectbox("Type", ["Furniture"])
-filtered_df = df[df["Collection Type"] == col_type] if col_type != "All" else df
+filtered_df = df[df["Type"] == col_type] if col_type != "All" else df
+
+# The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
+series = st.sidebar.selectbox("Series", get_options("Collection Type", filtered_df))
+if series != "All":
+    filtered_df = filtered_df[filtered_df["Collection Type"] == series]
 
 col_name = st.sidebar.selectbox("Collection", get_options("Collection", filtered_df))
 if col_name != "All":
