@@ -1,9 +1,0 @@
-[server]
-enableStaticServing = true
-
-[client]
-toolbarMode = "minimal"
-showErrorDetails = false
-
-[ui]
-hideSidebarNav = true
