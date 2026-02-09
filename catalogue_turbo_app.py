@@ -249,6 +249,19 @@ def get_options(column, filtered_df):
 
 df = pd.DataFrame(data)
 
+# Channel to Count Column Mapping
+channel_to_count = {
+    "Northcape": "NC Image Count",
+    "Overstock": "OS Image Count",
+    "Wayfair": "WF Image Count",
+    "Home Depot": "HD Image Count"
+}
+
+# Filter by Channel (Image Count > 0)
+count_col = channel_to_count.get(selected_market)
+if count_col and count_col in df.columns:
+    df = df[df[count_col] > 0]
+
 # Safety check for empty data or missing columns
 if df.empty or "Collection Type" not in df.columns:
     st.error("⚠️ Catalogue data is missing or corrupted. Please run the update script.")
@@ -340,6 +353,13 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     if pd.notna(item.get('Panel')) and item['Panel']:
         panel_html = f'<div class="detail-row"><span class="detail-label">Panel</span><span class="detail-value">{item["Panel"]}</span></div>'
 
+    # Image Count Badges Logic
+    image_stats_html = ""
+    for label, col in [("NC", "NC Image Count"), ("OS", "OS Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]:
+        count = item.get(col, 0)
+        if pd.notna(count) and count > 0:
+            image_stats_html += f'<div class="detail-row"><span class="detail-label">{label} Images</span><span class="detail-value">{int(count)}</span></div>'
+
     # Build card HTML without any leading whitespace to avoid markdown code blocks
     card_html = (
         f'<div class="product-card">'
@@ -355,8 +375,11 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">{item["Type"]}</span></div>'
                 f'<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">{item["Product"]}</span></div>'
                 f'<div class="detail-row"><span class="detail-label">Color</span><span class="detail-value">{color_display}</span></div>'
-                f'<div class="detail-row"><span class="detail-label">Arm</span><span class="detail-value">{item.get("Arm/Table-Top", "N/A")}</span></div>'
+                f'<div class="detail-row"><span class="detail-label">Arm/Table-Top</span><span class="detail-value">{item.get("Arm/Table-Top", "N/A")}</span></div>'
                 f'{panel_html}'
+                f'<div style="margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 8px;">'
+                    f'{image_stats_html}'
+                f'</div>'
             f'</div>'
         f'</div>'
     )
