@@ -377,12 +377,25 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 img_src = str(item[url_key]).replace("dl=0", "raw=1").replace("dl=1", "raw=1")
                 break
 
-    # Card Content
-    color_display = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{item["Color"]}</a>' if pd.notna(item.get('Color_Link')) else item["Color"]
-    
-    panel_html = ""
-    if pd.notna(item.get('Panel')) and item['Panel']:
-        panel_html = f'<div class="detail-row"><span class="detail-label">Panel</span><span class="detail-value">{item["Panel"]}</span></div>'
+    # Card Content Logic (Conditionally hide empty/nan values)
+    def get_val(key):
+        val = item.get(key)
+        return str(val) if pd.notna(val) and str(val).lower() != "nan" and str(val).strip() != "" else None
+
+    # Core Attributes
+    type_val = get_val("Type")
+    prod_val = get_val("Product")
+    color_val = get_val("Color")
+    arm_val = get_val("Arm/Table-Top")
+    panel_val = get_val("Panel")
+
+    def row_html(label, val):
+        if not val: return ""
+        # Handle special color link if it's the color row
+        final_val = val
+        if label == "Color" and pd.notna(item.get('Color_Link')):
+             final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
+        return f'<div class="detail-row"><span class="detail-label">{label}</span><span class="detail-value">{final_val}</span></div>'
 
     # Image Count Badges Logic
     image_stats_html = ""
@@ -403,11 +416,11 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<img src="{img_src}" alt="Product">'
             f'</div>'
             f'<div class="card-footer">'
-                f'<div class="detail-row"><span class="detail-label">Type</span><span class="detail-value">{item["Type"]}</span></div>'
-                f'<div class="detail-row"><span class="detail-label">Product</span><span class="detail-value">{item["Product"]}</span></div>'
-                f'<div class="detail-row"><span class="detail-label">Color</span><span class="detail-value">{color_display}</span></div>'
-                f'<div class="detail-row"><span class="detail-label">Arm/Table-Top</span><span class="detail-value">{item.get("Arm/Table-Top", "N/A")}</span></div>'
-                f'{panel_html}'
+                f'{row_html("Type", type_val)}'
+                f'{row_html("Product", prod_val)}'
+                f'{row_html("Color", color_val)}'
+                f'{row_html("Arm/Table-Top", arm_val)}'
+                f'{row_html("Panel", panel_val)}'
                 f'<div style="margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 8px;">'
                     f'{image_stats_html}'
                 f'</div>'
