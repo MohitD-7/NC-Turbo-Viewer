@@ -42,16 +42,20 @@ st.markdown("""
     .card-grid {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 20px;
+        gap: 24px;
         width: 100%;
-        padding-top: 1rem;
+        padding-top: 1.5rem;
     }
     
-    /* Cap at 5 columns if the screen is large or zoom is low */
+    /* Strictly 3-5 columns on Desktop */
+    @media (min-width: 900px) and (max-width: 1199px) {
+        .card-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (min-width: 1200px) and (max-width: 1599px) {
+        .card-grid { grid-template-columns: repeat(4, 1fr); }
+    }
     @media (min-width: 1600px) {
-        .card-grid {
-            grid-template-columns: repeat(5, 1fr);
-        }
+        .card-grid { grid-template-columns: repeat(5, 1fr); }
     }
 
     /* Product Card */
