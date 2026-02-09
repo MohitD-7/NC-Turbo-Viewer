@@ -2,6 +2,7 @@ import streamlit as st
 import json
 import os
 import pandas as pd
+import base64
 
 # Page Configuration
 st.set_page_config(
@@ -236,6 +237,23 @@ def load_data():
 
 data = load_data()
 
+# Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
+def get_base64_img(thumb_path):
+    if not thumb_path: return None
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        # Handle cases where path might be 'thumbnails/foo.jpg' or just 'foo.jpg'
+        fname = os.path.basename(thumb_path)
+        abs_path = os.path.join(base_dir, "static", "thumbnails", fname)
+        
+        if os.path.exists(abs_path):
+            with open(abs_path, "rb") as f:
+                data = base64.b64encode(f.read()).decode()
+                return f"data:image/jpeg;base64,{data}"
+    except Exception:
+        pass
+    return None
+
 # Sidebar - Filtering
 st.sidebar.title("")
 selected_market = st.sidebar.selectbox("CHANNEL", ["Northcape", "Overstock", "Wayfair", "Home Depot"])
@@ -332,15 +350,11 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     img_src = ""
     local_thumb = item.get("Local_Thumbnail")
     
+    # Priority 1: Local Thumbnail via Base64 (Rock solid)
     if pd.notna(local_thumb) and local_thumb:
-        thumb_filename = os.path.basename(str(local_thumb))
-        # Use cloud-friendly GitHub Raw URLs for the hosted version, local paths for local dev
-        if os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("STREAMLIT_SERVER_GATHER_USAGE_STATS") == "false":
-            img_src = f"https://raw.githubusercontent.com/MohitD-7/NC-Turbo-Viewer/main/static/thumbnails/{thumb_filename}"
-        else:
-            img_src = f"static/thumbnails/{thumb_filename}"
+        img_src = get_base64_img(str(local_thumb))
     
-    # Fallback URL if local fails
+    # Priority 2: Direct Dropbox Fallback
     if not img_src:
         for j in range(1, 16):
             url_key = f"{market_col_prefix} {j}"
