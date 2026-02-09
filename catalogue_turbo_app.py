@@ -80,7 +80,7 @@ st.markdown("""
     
     .image-container {
         width: 100%;
-        background: #f8fafc;
+        background: white;
         border-radius: 12px;
         aspect-ratio: 1.2 / 1;
         display: flex;
@@ -91,8 +91,8 @@ st.markdown("""
     }
     
     .image-container img {
-        max-width: 90%;
-        max-height: 90%;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
         transition: transform 0.5s ease;
     }
