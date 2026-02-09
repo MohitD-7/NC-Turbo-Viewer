@@ -333,10 +333,12 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     local_thumb = item.get("Local_Thumbnail")
     
     if pd.notna(local_thumb) and local_thumb:
-        # Robust path: Extract filename and use static serving
-        # Handle both relative 'thumbnails/foo.jpg' and absolute 'C:/.../thumbnails/foo.jpg'
         thumb_filename = os.path.basename(str(local_thumb))
-        img_src = f"static/thumbnails/{thumb_filename}"
+        # Use cloud-friendly GitHub Raw URLs for the hosted version, local paths for local dev
+        if os.environ.get("STREAMLIT_SHARING_MODE") or os.environ.get("STREAMLIT_SERVER_GATHER_USAGE_STATS") == "false":
+            img_src = f"https://raw.githubusercontent.com/MohitD-7/NC-Turbo-Viewer/main/static/thumbnails/{thumb_filename}"
+        else:
+            img_src = f"static/thumbnails/{thumb_filename}"
     
     # Fallback URL if local fails
     if not img_src:
