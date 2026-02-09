@@ -97,6 +97,8 @@ def update_catalogue():
                     if link: row_data[f"{header}_Link"] = link
                 else:
                     row_data[header] = val if val is not None else ""
+                
+                if val: has_data = True
             
             # Collect ALL potential Dropbox links for this item
             potential_urls = []
