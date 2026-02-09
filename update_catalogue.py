@@ -97,23 +97,38 @@ def update_catalogue():
                     if link: row_data[f"{header}_Link"] = link
                 else:
                     row_data[header] = val if val is not None else ""
-                    # Robust Image Search: Check if this is an image column and we don't have a preview yet
-                    if not first_img_url and "Image" in header and val and "dropbox.com" in str(val):
-                        # Use the first available Dropbox link as the preview thumbnail
-                        first_img_url = str(val)
-                
-                if val: has_data = True
+            
+            # Collect ALL potential Dropbox links for this item
+            potential_urls = []
+            # Check all columns for dropbox links (prioritize those with 'Image' in header)
+            # We sort headers to prioritize 'Image 1' over 'Image 10' if possible
+            img_cols = sorted([h for h in headers if h and "Image" in h and h != "Dropbox Folder Path"], 
+                             key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
+            
+            for h in img_cols:
+                val = row_data.get(h)
+                if val and "dropbox.com" in str(val):
+                    potential_urls.append(str(val))
             
             if has_data:
-                row_data["_img_url"] = first_img_url
+                row_data["_potential_urls"] = potential_urls
                 catalogue_data.append(row_data)
 
     print(f"Optimizing data and thumbnails for {len(catalogue_data)} items...")
     
     def process_item(item):
-        if item.get("_img_url"):
-            item["Local_Thumbnail"] = download_and_resize(item["_img_url"], item.get("Part Number"))
-        del item["_img_url"]
+        urls = item.get("_potential_urls", [])
+        item["Local_Thumbnail"] = None
+        
+        # Try each URL until one succeeds
+        for url in urls:
+            thumb_path = download_and_resize(url, item.get("Part Number"))
+            if thumb_path:
+                item["Local_Thumbnail"] = thumb_path
+                break
+                
+        if "_potential_urls" in item:
+            del item["_potential_urls"]
         return item
 
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
