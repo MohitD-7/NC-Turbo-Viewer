@@ -287,7 +287,8 @@ if df.empty or "Collection Type" not in df.columns:
     st.stop()
 
 # Filtering State
-col_type = st.sidebar.selectbox("Type", get_options("Collection Type", df))
+# User requested only "Furniture" for now
+col_type = st.sidebar.selectbox("Type", ["Furniture"])
 filtered_df = df[df["Collection Type"] == col_type] if col_type != "All" else df
 
 col_name = st.sidebar.selectbox("Collection", get_options("Collection", filtered_df))
@@ -298,15 +299,15 @@ arm = st.sidebar.selectbox("Arm/Table-Top", get_options("Arm/Table-Top", filtere
 if arm != "All":
     filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
 
+product = st.sidebar.selectbox("Product", get_options("Product", filtered_df))
+if product != "All":
+    filtered_df = filtered_df[filtered_df["Product"] == product]
+
 panel_opts = get_options("Panel", filtered_df)
 if len(panel_opts) > 1: # Only show if there are actual options besides "All"
     panel = st.sidebar.selectbox("Panel", panel_opts)
     if panel != "All":
         filtered_df = filtered_df[filtered_df["Panel"] == panel]
-
-product = st.sidebar.selectbox("Product", get_options("Product", filtered_df))
-if product != "All":
-    filtered_df = filtered_df[filtered_df["Product"] == product]
 
 color = st.sidebar.selectbox("Color", get_options("Color", filtered_df))
 if color != "All":
