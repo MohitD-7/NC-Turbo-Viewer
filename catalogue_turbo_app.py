@@ -98,7 +98,7 @@ st.markdown("""
     }
     
     .product-card:hover .image-container img {
-        transform: scale(1.20);
+        transform: scale(1.25);
     }
     
     .card-header {
