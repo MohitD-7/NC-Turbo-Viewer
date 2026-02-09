@@ -336,7 +336,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         # Robust path: Extract filename and use static serving
         # Handle both relative 'thumbnails/foo.jpg' and absolute 'C:/.../thumbnails/foo.jpg'
         thumb_filename = os.path.basename(str(local_thumb))
-        img_src = f"app/static/thumbnails/{thumb_filename}"
+        img_src = f"static/thumbnails/{thumb_filename}"
     
     # Fallback URL if local fails
     if not img_src:
