@@ -97,7 +97,9 @@ def update_catalogue():
                     if link: row_data[f"{header}_Link"] = link
                 else:
                     row_data[header] = val if val is not None else ""
-                    if header == "Northcape Image 1" and val and "dropbox.com" in str(val):
+                    # Robust Image Search: Check if this is an image column and we don't have a preview yet
+                    if not first_img_url and "Image" in header and val and "dropbox.com" in str(val):
+                        # Use the first available Dropbox link as the preview thumbnail
                         first_img_url = str(val)
                 
                 if val: has_data = True
