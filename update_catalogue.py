@@ -101,6 +101,13 @@ def update_catalogue():
                         row_data[norm_header] = get_value_from_formula(val)
                         link = extract_link(val)
                         if link: row_data[f"{norm_header}_Link"] = link
+                    elif norm_header == "Type":
+                        # Normalize Cushions (plural) to Cushion (singular)
+                        val_str = str(val) if val else ""
+                        if val_str.lower() == "cushions":
+                            row_data[norm_header] = "Cushion"
+                        else:
+                            row_data[norm_header] = val_str
                     else:
                         row_data[norm_header] = val if val is not None else ""
                     

@@ -321,12 +321,16 @@ channel_to_count = {
 # Filter by Channel (Image Count > 0)
 count_col = channel_to_count.get(selected_market)
 if count_col and count_col in df.columns:
+    # Force numeric conversion for reliability
+    df[count_col] = pd.to_numeric(df[count_col], errors='coerce').fillna(0)
     df = df[df[count_col] > 0]
 
 # Safety check for empty data or missing columns
 if df.empty or "Collection Type" not in df.columns:
     st.error("⚠️ Catalogue data is missing or corrupted. Please run the update script.")
     st.sidebar.error("Data Load Error")
+    if not df.empty:
+        st.write("Columns found:", df.columns.tolist())
     st.stop()
 
 # Filtering State
