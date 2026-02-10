@@ -330,8 +330,9 @@ if df.empty or "Collection Type" not in df.columns:
     st.stop()
 
 # Filtering State
-# User requested only "Furniture" for now, matched against the 'Type' column
-col_type = st.sidebar.selectbox("Type", ["Furniture"])
+# Dynamic Type options based on data
+type_options = get_options("Type", df)
+col_type = st.sidebar.selectbox("Type", type_options)
 filtered_df = df[df["Type"] == col_type] if col_type != "All" else df
 
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
@@ -343,13 +344,18 @@ col_name = st.sidebar.selectbox("Collection", get_options("Collection", filtered
 if col_name != "All":
     filtered_df = filtered_df[filtered_df["Collection"] == col_name]
 
-arm = st.sidebar.selectbox("Arm/Table-Top", get_options("Arm/Table-Top", filtered_df))
-if arm != "All":
-    filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
+# Furniture specific filters - only show if available in filtered data
+arm_opts = get_options("Arm/Table-Top", filtered_df)
+if len(arm_opts) > 1:
+    arm = st.sidebar.selectbox("Arm/Table-Top", arm_opts)
+    if arm != "All":
+        filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
 
-product = st.sidebar.selectbox("Product", get_options("Product", filtered_df))
-if product != "All":
-    filtered_df = filtered_df[filtered_df["Product"] == product]
+product_opts = get_options("Product", filtered_df)
+if len(product_opts) > 1:
+    product = st.sidebar.selectbox("Product", product_opts)
+    if product != "All":
+        filtered_df = filtered_df[filtered_df["Product"] == product]
 
 panel_opts = get_options("Panel", filtered_df)
 if len(panel_opts) > 1: # Only show if there are actual options besides "All"
@@ -373,7 +379,7 @@ search_query = st.text_input("", placeholder="🔍 Search Part Number, Collectio
 if search_query:
     q = search_query.lower()
     # Search across all relevant text-based columns
-    searchable_cols = [c for c in filtered_df.columns if not c.endswith("Image") and c != "Local_Thumbnail" and c != "Color_Link"]
+    searchable_cols = [c for c in filtered_df.columns if not c.endswith("Image") and c != "Local_Thumbnail" and c != "Color_Link" and c != "Image_List"]
     mask = filtered_df[searchable_cols].apply(
         lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1
     )
@@ -399,6 +405,16 @@ paged_data = filtered_df.iloc[start_idx:end_idx]
 
 # Start of the responsive grid
 grid_html = '<div class="card-grid">'
+
+# Define which fields to show in the card footer based on Type
+# If Furniture: Product, Color, Arm/Table-Top, Panel
+# If Cushions: Color, and potentially others if they exist
+# Actually, let's just show all non-technical fields that have data
+TECHNICAL_FIELDS = [
+    "Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", 
+    "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", 
+    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
+]
 
 for i, (_, item) in enumerate(paged_data.iterrows()):
     # Prepare all available thumbnails for this item
@@ -427,12 +443,14 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         val = item.get(key)
         return str(val) if pd.notna(val) and str(val).lower() != "nan" and str(val).strip() != "" else None
 
-    # Core Attributes
-    type_val = get_val("Type")
-    prod_val = get_val("Product")
-    color_val = get_val("Color")
-    arm_val = get_val("Arm/Table-Top")
-    panel_val = get_val("Panel")
+    # Determine fields to display dynamically
+    display_fields = []
+    # Identify all keys in the item that are not technical or image-related
+    for key in item.keys():
+        if key not in TECHNICAL_FIELDS and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
+            val = get_val(key)
+            if val:
+                display_fields.append((key, val))
 
     def row_html(label, val):
         if not val: return ""
@@ -454,6 +472,9 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     if len(b64_images) > 1:
         swap_html = f'<div class="swap-btn" onclick="window.swapImage(\'img-{i}\')" title="Next Image">🔄</div>'
 
+    # Build detail rows for fields
+    detail_rows_html = "".join([row_html(lbl, v) for lbl, v in display_fields])
+
     # Build card HTML with unique ID for image and data-urls for swapping
     card_html = (
         f'<div class="product-card">'
@@ -467,11 +488,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'{swap_html}'
             f'</div>'
             f'<div class="card-footer">'
-                f'{row_html("Type", type_val)}'
-                f'{row_html("Product", prod_val)}'
-                f'{row_html("Color", color_val)}'
-                f'{row_html("Arm/Table-Top", arm_val)}'
-                f'{row_html("Panel", panel_val)}'
+                f'{detail_rows_html}'
                 f'<div style="margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 8px;">'
                     f'{image_stats_html}'
                 f'</div>'

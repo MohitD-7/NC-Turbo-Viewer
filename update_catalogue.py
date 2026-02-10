@@ -7,6 +7,7 @@ from PIL import Image
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import glob
 
 # --- Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -14,7 +15,8 @@ THUMBNAIL_SIZE = (400, 400)
 MAX_THREADS = 15  # Slower but more reliable (prevents throttling)
 PUBLIC_THUMBS_DIR = os.path.join(BASE_DIR, "static", "thumbnails")
 DATA_DIR = os.path.join(BASE_DIR, "data")
-EXCEL_FILE = os.path.join(BASE_DIR, "catalogue.xlsx")
+# Support multiple excel files
+EXCEL_FILES = glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
 JSON_OUTPUT = os.path.join(DATA_DIR, "catalogue.json")
 
 def extract_link(formula):
@@ -62,57 +64,61 @@ def download_and_resize(url, part_number):
     return None
 
 def update_catalogue():
-    print("--- NorthCape Turbo Upkeep Script ---")
-    if not os.path.exists(EXCEL_FILE):
-        print(f"Error: {EXCEL_FILE} not found in this folder!")
+    print("--- NorthCape Turbo Upkeep Script v2 ---")
+    if not EXCEL_FILES:
+        print(f"Error: No Excel files found in {BASE_DIR}!")
         return
 
     os.makedirs(PUBLIC_THUMBS_DIR, exist_ok=True)
     os.makedirs(DATA_DIR, exist_ok=True)
     
-    print(f"Loading Excel: {EXCEL_FILE}...")
-    wb = openpyxl.load_workbook(EXCEL_FILE, data_only=False)
-    
     catalogue_data = []
 
-    for sheet_name in wb.sheetnames:
-        if sheet_name in ["Status", "Empty", "Sheet1"]: continue
+    for excel_path in EXCEL_FILES:
+        print(f"Loading Excel: {os.path.basename(excel_path)}...")
+        wb = openpyxl.load_workbook(excel_path, data_only=False)
         
-        print(f"Processing Sheet: {sheet_name}")
-        ws = wb[sheet_name]
-        headers = [cell.value for cell in ws[1]]
-        
-        for row_idx in range(2, ws.max_row + 1):
-            row_data = {"Collection Type": sheet_name}
-            has_data = False
+        for sheet_name in wb.sheetnames:
+            if sheet_name in ["Status", "Empty", "Sheet1"]: continue
             
-            for col_idx, header in enumerate(headers):
-                if not header: continue
-                cell = ws.cell(row=row_idx, column=col_idx + 1)
-                val = cell.value
+            print(f"  Processing Sheet: {sheet_name}")
+            ws = wb[sheet_name]
+            headers = [cell.value for cell in ws[1] if cell.value]
+            
+            for row_idx in range(2, ws.max_row + 1):
+                row_data = {"Collection Type": sheet_name}
+                has_data = False
                 
-                if header in ["Color", "Part Number"]:
-                    row_data[header] = get_value_from_formula(val)
-                    link = extract_link(val)
-                    if link: row_data[f"{header}_Link"] = link
-                else:
-                    row_data[header] = val if val is not None else ""
+                for col_idx, header in enumerate(headers):
+                    cell = ws.cell(row=row_idx, column=col_idx + 1)
+                    val = cell.value
+                    
+                    # Normalize Headers (Cushion Color -> Color)
+                    norm_header = header
+                    if header == "Cushion Color": norm_header = "Color"
+                    
+                    if norm_header in ["Color", "Part Number"]:
+                        row_data[norm_header] = get_value_from_formula(val)
+                        link = extract_link(val)
+                        if link: row_data[f"{norm_header}_Link"] = link
+                    else:
+                        row_data[norm_header] = val if val is not None else ""
+                    
+                    if val: has_data = True
                 
-                if val: has_data = True
-            
-            # Collect ALL potential Dropbox links for this item
-            potential_urls = []
-            img_cols = sorted([h for h in headers if h and "Image" in h and h != "Dropbox Folder Path"], 
-                             key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
-            
-            for h in img_cols:
-                val = row_data.get(h)
-                if val and "dropbox.com" in str(val):
-                    potential_urls.append(str(val))
-            
-            if has_data:
-                row_data["_potential_urls"] = potential_urls
-                catalogue_data.append(row_data)
+                # Collect ALL potential Dropbox links for this item
+                potential_urls = []
+                img_cols = sorted([h for h in headers if h and "Image" in h and h != "Dropbox Folder Path"], 
+                                 key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
+                
+                for h in img_cols:
+                    val = row_data.get(h)
+                    if val and "dropbox.com" in str(val):
+                        potential_urls.append(str(val))
+                
+                if has_data:
+                    row_data["_potential_urls"] = potential_urls
+                    catalogue_data.append(row_data)
 
     print(f"Optimizing data and thumbnails for {len(catalogue_data)} items...")
     
@@ -136,7 +142,7 @@ def update_catalogue():
             # Pick a primary thumbnail (Smart logic: skip logos if possible)
             primary = valid_thumbs[0]
             for t in valid_thumbs:
-                # If the filename or mapping suggests it's NOT a logo, pick it
+                # If the filename suggests it's NOT a logo, pick it
                 is_logo = any(word in t.lower() for word in blacklist)
                 if not is_logo:
                     primary = t
