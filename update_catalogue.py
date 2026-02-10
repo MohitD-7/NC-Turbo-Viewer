@@ -11,7 +11,7 @@ import hashlib
 # --- Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 THUMBNAIL_SIZE = (400, 400)
-MAX_THREADS = 40  # Faster with more threads
+MAX_THREADS = 15  # Slower but more reliable (prevents throttling)
 PUBLIC_THUMBS_DIR = os.path.join(BASE_DIR, "static", "thumbnails")
 DATA_DIR = os.path.join(BASE_DIR, "data")
 EXCEL_FILE = os.path.join(BASE_DIR, "catalogue.xlsx")
@@ -47,7 +47,8 @@ def download_and_resize(url, part_number):
 
     try:
         raw_url = url.replace("dl=0", "raw=1").replace("dl=1", "raw=1")
-        response = requests.get(raw_url, timeout=10)
+        # Increased timeout for reliability
+        response = requests.get(raw_url, timeout=30)
         if response.status_code == 200:
             img = Image.open(BytesIO(response.content))
             if img.mode in ("RGBA", "P"):
@@ -84,7 +85,6 @@ def update_catalogue():
         for row_idx in range(2, ws.max_row + 1):
             row_data = {"Collection Type": sheet_name}
             has_data = False
-            first_img_url = None
             
             for col_idx, header in enumerate(headers):
                 if not header: continue
@@ -102,8 +102,6 @@ def update_catalogue():
             
             # Collect ALL potential Dropbox links for this item
             potential_urls = []
-            # Check all columns for dropbox links (prioritize those with 'Image' in header)
-            # We sort headers to prioritize 'Image 1' over 'Image 10' if possible
             img_cols = sorted([h for h in headers if h and "Image" in h and h != "Dropbox Folder Path"], 
                              key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
             
@@ -121,13 +119,29 @@ def update_catalogue():
     def process_item(item):
         urls = item.get("_potential_urls", [])
         item["Local_Thumbnail"] = None
+        item["Image_List"] = [] # Store multiple images for toggling
         
-        # Try each URL until one succeeds
+        # Primary Selection (Smart: avoid logos for the first shot)
+        blacklist = ["logo", "sunbrella", "branding", "infographic", "text"]
+        
+        valid_thumbs = []
         for url in urls:
             thumb_path = download_and_resize(url, item.get("Part Number"))
             if thumb_path:
-                item["Local_Thumbnail"] = thumb_path
-                break
+                valid_thumbs.append(thumb_path)
+                if len(valid_thumbs) >= 5: break # Cap at 5 images per card
+        
+        if valid_thumbs:
+            item["Image_List"] = valid_thumbs
+            # Pick a primary thumbnail (Smart logic: skip logos if possible)
+            primary = valid_thumbs[0]
+            for t in valid_thumbs:
+                # If the filename or mapping suggests it's NOT a logo, pick it
+                is_logo = any(word in t.lower() for word in blacklist)
+                if not is_logo:
+                    primary = t
+                    break
+            item["Local_Thumbnail"] = primary
                 
         if "_potential_urls" in item:
             del item["_potential_urls"]

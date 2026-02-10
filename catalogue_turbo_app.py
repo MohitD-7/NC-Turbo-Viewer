@@ -101,6 +101,42 @@ st.markdown("""
         transform: scale(1.25);
     }
     
+    /* Swap Image Button */
+    .image-container {
+        position: relative;
+    }
+    
+    .swap-btn {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e2e8f0;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 10;
+        transition: all 0.2s;
+        opacity: 0.6;
+    }
+    
+    .swap-btn:hover {
+        opacity: 1;
+        background: white;
+        transform: scale(1.1);
+        border-color: #3b82f6;
+    }
+    
+    .product-card:hover .swap-btn {
+        opacity: 0.9;
+    }
+    
     .card-header {
         display: flex;
         flex-direction: column;
@@ -365,21 +401,26 @@ paged_data = filtered_df.iloc[start_idx:end_idx]
 grid_html = '<div class="card-grid">'
 
 for i, (_, item) in enumerate(paged_data.iterrows()):
-    # Optimized Image Priority
-    img_src = ""
-    local_thumb = item.get("Local_Thumbnail")
+    # Prepare all available thumbnails for this item
+    image_list = item.get("Image_List", [])
+    if not image_list and item.get("Local_Thumbnail"):
+        image_list = [item["Local_Thumbnail"]]
+        
+    # Get base64 for the top 3 images for instant swapping
+    b64_images = []
+    for thumb_path in image_list[:3]:
+        b64 = get_base64_img(thumb_path)
+        if b64: b64_images.append(b64)
     
-    # Priority 1: Local Thumbnail via Base64 (Rock solid)
-    if pd.notna(local_thumb) and local_thumb:
-        img_src = get_base64_img(str(local_thumb))
+    # Fallback to primary if empty
+    if not b64_images:
+        primary_b64 = get_base64_img(item.get("Local_Thumbnail"))
+        if primary_b64: b64_images = [primary_b64]
     
-    # Priority 2: Direct Dropbox Fallback
-    if not img_src:
-        for j in range(1, 16):
-            url_key = f"{market_col_prefix} {j}"
-            if pd.notna(item.get(url_key)) and item[url_key]:
-                img_src = str(item[url_key]).replace("dl=0", "raw=1").replace("dl=1", "raw=1")
-                break
+    img_src = b64_images[0] if b64_images else ""
+    
+    # Store list as JSON string for JS
+    b64_json = json.dumps(b64_images).replace("'", "&apos;")
 
     # Card Content Logic (Conditionally hide empty/nan values)
     def get_val(key):
@@ -408,7 +449,12 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         if pd.notna(count) and count > 0:
             image_stats_html += f'<div class="detail-row"><span class="detail-label">{label} Images</span><span class="detail-value">{int(count)}</span></div>'
 
-    # Build card HTML without any leading whitespace to avoid markdown code blocks
+    # Swap Button HTML (only if more than 1 image)
+    swap_html = ""
+    if len(b64_images) > 1:
+        swap_html = f'<div class="swap-btn" onclick="window.swapImage(\'img-{i}\')" title="Next Image">🔄</div>'
+
+    # Build card HTML with unique ID for image and data-urls for swapping
     card_html = (
         f'<div class="product-card">'
             f'<div class="card-header">'
@@ -417,7 +463,8 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
-                f'<img src="{img_src}" alt="Product">'
+                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls=\'{b64_json}\' data-idx="0">'
+                f'{swap_html}'
             f'</div>'
             f'<div class="card-footer">'
                 f'{row_html("Type", type_val)}'
@@ -434,4 +481,19 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     grid_html += card_html
 
 grid_html += '</div>'
-st.markdown(grid_html, unsafe_allow_html=True)
+
+# Inject JavaScript for instant image swapping
+js_swap = """
+<script>
+window.swapImage = function(id) {
+    const img = document.getElementById(id);
+    if (!img) return;
+    const urls = JSON.parse(img.getAttribute('data-urls'));
+    let idx = parseInt(img.getAttribute('data-idx'));
+    idx = (idx + 1) % urls.length;
+    img.src = urls[idx];
+    img.setAttribute('data-idx', idx);
+};
+</script>
+"""
+st.markdown(grid_html + js_swap, unsafe_allow_html=True)
