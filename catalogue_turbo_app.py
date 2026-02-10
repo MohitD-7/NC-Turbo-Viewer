@@ -263,8 +263,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.sidebar.caption("v1.1 - Cushion Update")
-
 # Data Loading with Caching
 @st.cache_data
 def load_catalogue_data():
@@ -274,15 +272,11 @@ def load_catalogue_data():
     
     if os.path.exists(json_path):
         with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            # Debug info in logs
-            print(f"Loaded {len(data)} records from {json_path}")
-            return data
+            return json.load(f)
     print(f"Warning: Data file not found at {json_path}")
     return []
 
 data = load_catalogue_data()
-st.sidebar.caption(f"Loaded {len(data)} total records")
 
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
@@ -512,15 +506,22 @@ grid_html += '</div>'
 # Inject JavaScript for instant image swapping
 js_swap = """
 <script>
-window.swapImage = function(id) {
-    const img = document.getElementById(id);
-    if (!img) return;
-    const urls = JSON.parse(img.getAttribute('data-urls'));
-    let idx = parseInt(img.getAttribute('data-idx'));
-    idx = (idx + 1) % urls.length;
-    img.src = urls[idx];
-    img.setAttribute('data-idx', idx);
-};
+if (typeof window.swapImage === 'undefined') {
+    window.swapImage = function(id) {
+        const img = document.getElementById(id);
+        if (!img) return;
+        try {
+            const urls = JSON.parse(img.getAttribute('data-urls'));
+            if (!urls || urls.length < 2) return;
+            let idx = parseInt(img.getAttribute('data-idx')) || 0;
+            idx = (idx + 1) % urls.length;
+            img.src = urls[idx];
+            img.setAttribute('data-idx', idx);
+        } catch (e) {
+            console.error("Swap error:", e);
+        }
+    };
+}
 </script>
 """
 st.markdown(grid_html + js_swap, unsafe_allow_html=True)
