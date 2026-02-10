@@ -263,20 +263,25 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.sidebar.caption("v1.1 - Cushion Update")
+
 # Data Loading with Caching
 @st.cache_data
-def load_data():
+def load_catalogue_data():
     # Use absolute path relative to this script's directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(base_dir, "data", "catalogue.json")
     
     if os.path.exists(json_path):
         with open(json_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            data = json.load(f)
+            # Debug info in logs
+            print(f"Loaded {len(data)} records from {json_path}")
+            return data
     print(f"Warning: Data file not found at {json_path}")
     return []
 
-data = load_data()
+data = load_catalogue_data()
 
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
