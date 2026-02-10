@@ -282,6 +282,7 @@ def load_catalogue_data():
     return []
 
 data = load_catalogue_data()
+st.sidebar.caption(f"Loaded {len(data)} total records")
 
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
