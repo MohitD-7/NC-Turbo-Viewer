@@ -474,7 +474,8 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     # Swap Button HTML (only if more than 1 image)
     swap_html = ""
     if len(b64_images) > 1:
-        swap_html = f'<div class="swap-btn" onclick="window.swapImage(\'img-{i}\')" title="Next Image">🔄</div>'
+        # Use a data-target attribute instead of inline onclick for better reliability
+        swap_html = f'<div class="swap-btn" data-swap-target="img-{i}" title="Next Image">🔄</div>'
 
     # Build detail rows for fields
     detail_rows_html = "".join([row_html(lbl, v) for lbl, v in display_fields])
@@ -504,24 +505,33 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 grid_html += '</div>'
 
 # Inject JavaScript for instant image swapping
-# Note: Using a single global function on window for reliability
+# Note: Using Event Delegation for maximum reliability in Streamlit
 js_swap = """
 <script>
-window.swapImage = function(id) {
-    const img = document.getElementById(id);
-    if (!img) return;
-    try {
-        const urls = JSON.parse(img.getAttribute('data-urls'));
-        if (!urls || urls.length < 2) return;
-        let idx = parseInt(img.getAttribute('data-idx')) || 0;
-        idx = (idx + 1) % urls.length;
-        img.src = urls[idx];
-        img.setAttribute('data-idx', idx);
-        console.log("Swapped " + id + " to index " + idx);
-    } catch (e) {
-        console.error("Swap error:", e);
-    }
-};
+(function() {
+    // Single event listener for all swap buttons (Event Delegation)
+    document.addEventListener('click', function(e) {
+        const btn = e.target.closest('.swap-btn');
+        if (!btn) return;
+        
+        const targetId = btn.getAttribute('data-swap-target');
+        const img = document.getElementById(targetId);
+        if (!img) return;
+        
+        try {
+            const urls = JSON.parse(img.getAttribute('data-urls'));
+            if (!urls || urls.length < 2) return;
+            
+            let idx = parseInt(img.getAttribute('data-idx')) || 0;
+            idx = (idx + 1) % urls.length;
+            
+            img.src = urls[idx];
+            img.setAttribute('data-idx', idx);
+        } catch (err) {
+            console.error("Swap error:", err);
+        }
+    });
+})();
 </script>
 """
 st.markdown(grid_html + js_swap, unsafe_allow_html=True)
