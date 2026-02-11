@@ -3,6 +3,7 @@ import json
 import os
 import pandas as pd
 import base64
+import streamlit.components.v1 as components
 
 # Page Configuration
 st.set_page_config(
@@ -505,13 +506,17 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
 grid_html += '</div>'
 
-# Inject JavaScript for instant image swapping
-# Note: Using Event Delegation for maximum reliability in Streamlit
-js_swap = """
+# 1. Inject the Grid HTML
+st.markdown(grid_html, unsafe_allow_html=True)
+
+# 2. Inject the Image Swapper Script
+# This uses an iframe-to-parent hack to bypass sanitization
+# It attaches a capture-phase listener to the parent document
+js_swap_html = """
 <script>
 (function() {
-    console.log("Image Swapper Loaded");
-    document.addEventListener('click', function(e) {
+    const parentDoc = window.parent.document;
+    const handler = function(e) {
         const btn = e.target.closest('.swap-btn');
         if (!btn) return;
         
@@ -519,11 +524,8 @@ js_swap = """
         e.stopPropagation();
         
         const targetId = btn.getAttribute('data-swap-target');
-        const img = document.getElementById(targetId);
-        if (!img) {
-            console.error("Swap Error: Image not found", targetId);
-            return;
-        }
+        const img = parentDoc.getElementById(targetId);
+        if (!img) return;
         
         try {
             const b64Data = img.getAttribute('data-urls-b64');
@@ -535,12 +537,12 @@ js_swap = """
             
             img.src = urls[idx];
             img.setAttribute('data-idx', idx);
-            console.log("Swapped " + targetId + " to index " + idx);
         } catch (err) {
-            console.error("Swap JS Error:", err);
+            console.error("Swap Error:", err);
         }
-    }, true); // Use capture phase for maximum priority
+    };
+    parentDoc.addEventListener('click', handler, true);
 })();
 </script>
 """
-st.markdown(grid_html + js_swap, unsafe_allow_html=True)
+components.html(js_swap_html, height=0)
