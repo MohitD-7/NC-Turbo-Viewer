@@ -439,8 +439,9 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     
     img_src = b64_images[0] if b64_images else ""
     
-    # Store list as JSON string for JS
-    b64_json = json.dumps(b64_images).replace("'", "&apos;")
+    # Store list as Base64-encoded JSON to avoid any HTML attribute mangling
+    b64_json_str = json.dumps(b64_images)
+    b64_data_attr = base64.b64encode(b64_json_str.encode()).decode()
 
     # Card Content Logic (Conditionally hide empty/nan values)
     def get_val(key):
@@ -474,8 +475,8 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     # Swap Button HTML (only if more than 1 image)
     swap_html = ""
     if len(b64_images) > 1:
-        # Use a data-target attribute instead of inline onclick for better reliability
-        swap_html = f'<div class="swap-btn" data-swap-target="img-{i}" title="Next Image">🔄</div>'
+        # Use a data-target and explicit pointer-events for reliability
+        swap_html = f'<div class="swap-btn" data-swap-target="img-{i}" title="Next Image" style="cursor: pointer; pointer-events: auto;">🔄</div>'
 
     # Build detail rows for fields
     detail_rows_html = "".join([row_html(lbl, v) for lbl, v in display_fields])
@@ -489,7 +490,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
-                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls=\'{b64_json}\' data-idx="0">'
+                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0">'
                 f'{swap_html}'
             f'</div>'
             f'<div class="card-footer">'
@@ -509,17 +510,24 @@ grid_html += '</div>'
 js_swap = """
 <script>
 (function() {
-    // Single event listener for all swap buttons (Event Delegation)
+    console.log("Image Swapper Loaded");
     document.addEventListener('click', function(e) {
         const btn = e.target.closest('.swap-btn');
         if (!btn) return;
         
+        e.preventDefault();
+        e.stopPropagation();
+        
         const targetId = btn.getAttribute('data-swap-target');
         const img = document.getElementById(targetId);
-        if (!img) return;
+        if (!img) {
+            console.error("Swap Error: Image not found", targetId);
+            return;
+        }
         
         try {
-            const urls = JSON.parse(img.getAttribute('data-urls'));
+            const b64Data = img.getAttribute('data-urls-b64');
+            const urls = JSON.parse(atob(b64Data));
             if (!urls || urls.length < 2) return;
             
             let idx = parseInt(img.getAttribute('data-idx')) || 0;
@@ -527,10 +535,11 @@ js_swap = """
             
             img.src = urls[idx];
             img.setAttribute('data-idx', idx);
+            console.log("Swapped " + targetId + " to index " + idx);
         } catch (err) {
-            console.error("Swap error:", err);
+            console.error("Swap JS Error:", err);
         }
-    });
+    }, true); // Use capture phase for maximum priority
 })();
 </script>
 """
