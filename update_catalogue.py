@@ -127,34 +127,48 @@ def update_catalogue():
                     row_data["_potential_urls"] = potential_urls
                     catalogue_data.append(row_data)
 
-    print(f"Optimizing data and thumbnails for {len(catalogue_data)} items...")
+    stats = {"primary_1": 0, "no_logo": 0, "fallback": 0}
     
     def process_item(item):
         urls = item.get("_potential_urls", [])
-        item["Local_Thumbnail"] = None
-        item["Image_List"] = [] # Store multiple images for toggling
+        blacklist = ["logo", "sunbrella", "branding", "infographic", "text", "warranty"]
         
-        # Primary Selection (Smart: avoid logos for the first shot)
-        blacklist = ["logo", "sunbrella", "branding", "infographic", "text"]
-        
-        valid_thumbs = []
+        # Download and collect pairs of (original_url, local_thumb_path)
+        url_thumb_pairs = []
         for url in urls:
             thumb_path = download_and_resize(url, item.get("Part Number"))
             if thumb_path:
-                valid_thumbs.append(thumb_path)
-                if len(valid_thumbs) >= 5: break # Cap at 5 images per card
+                url_thumb_pairs.append((url, thumb_path))
+                if len(url_thumb_pairs) >= 5: break # Cap at 5 images
         
-        if valid_thumbs:
-            item["Image_List"] = valid_thumbs
-            # Pick a primary thumbnail (Smart logic: skip logos if possible)
-            primary = valid_thumbs[0]
-            for t in valid_thumbs:
-                # If the filename suggests it's NOT a logo, pick it
-                is_logo = any(word in t.lower() for word in blacklist)
-                if not is_logo:
-                    primary = t
+        item["Image_List"] = [p[1] for p in url_thumb_pairs]
+        item["Local_Thumbnail"] = None
+        
+        if url_thumb_pairs:
+            # Ranking Algorithm for Primary Thumbnail:
+            # 1. Best: URL contains "_1." (standard primary shot) and is NOT a logo/blacklist
+            for url, thumb in url_thumb_pairs:
+                url_lower = url.lower()
+                is_manual_primary = "_1." in url_lower or "_1_" in url_lower
+                is_blacklisted = any(word in url_lower for word in blacklist)
+                
+                if is_manual_primary and not is_blacklisted:
+                    item["Local_Thumbnail"] = thumb
+                    stats["primary_1"] += 1
                     break
-            item["Local_Thumbnail"] = primary
+            
+            # 2. Second Best: Any image that is NOT a logo/blacklist
+            if not item["Local_Thumbnail"]:
+                for url, thumb in url_thumb_pairs:
+                    if not any(word in url.lower() for word in blacklist):
+                        item["Local_Thumbnail"] = thumb
+                        stats["no_logo"] += 1
+                        break
+            
+            # 3. Fallback: Just use the very first available image
+            if not item["Local_Thumbnail"]:
+                item["Local_Thumbnail"] = url_thumb_pairs[0][1]
+                stats["fallback"] += 1
                 
         if "_potential_urls" in item:
             del item["_potential_urls"]
@@ -162,6 +176,12 @@ def update_catalogue():
 
     with ThreadPoolExecutor(max_workers=MAX_THREADS) as executor:
         final_data = list(executor.map(process_item, catalogue_data))
+
+    print("\n--- Thumbnail Statistics ---")
+    print(f"  ✅ Priority _1 Image: {stats['primary_1']}")
+    print(f"  ℹ️  Clean product shot (no logo): {stats['no_logo']}")
+    print(f"  ⚠️  Fallback (may include logo): {stats['fallback']}")
+    print("---------------------------\n")
 
     with open(JSON_OUTPUT, 'w', encoding='utf-8') as f:
         json.dump(final_data, f, indent=2, ensure_ascii=False)

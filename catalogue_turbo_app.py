@@ -504,24 +504,24 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 grid_html += '</div>'
 
 # Inject JavaScript for instant image swapping
+# Note: Using a single global function on window for reliability
 js_swap = """
 <script>
-if (typeof window.swapImage === 'undefined') {
-    window.swapImage = function(id) {
-        const img = document.getElementById(id);
-        if (!img) return;
-        try {
-            const urls = JSON.parse(img.getAttribute('data-urls'));
-            if (!urls || urls.length < 2) return;
-            let idx = parseInt(img.getAttribute('data-idx')) || 0;
-            idx = (idx + 1) % urls.length;
-            img.src = urls[idx];
-            img.setAttribute('data-idx', idx);
-        } catch (e) {
-            console.error("Swap error:", e);
-        }
-    };
-}
+window.swapImage = function(id) {
+    const img = document.getElementById(id);
+    if (!img) return;
+    try {
+        const urls = JSON.parse(img.getAttribute('data-urls'));
+        if (!urls || urls.length < 2) return;
+        let idx = parseInt(img.getAttribute('data-idx')) || 0;
+        idx = (idx + 1) % urls.length;
+        img.src = urls[idx];
+        img.setAttribute('data-idx', idx);
+        console.log("Swapped " + id + " to index " + idx);
+    } catch (e) {
+        console.error("Swap error:", e);
+    }
+};
 </script>
 """
 st.markdown(grid_html + js_swap, unsafe_allow_html=True)
