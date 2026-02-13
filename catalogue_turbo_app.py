@@ -138,6 +138,43 @@ st.markdown("""
         opacity: 0.9;
     }
     
+    /* Shortlist Button */
+    .shortlist-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e2e8f0;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 10;
+        transition: all 0.2s;
+        opacity: 0;
+    }
+    
+    .shortlist-btn.active {
+        opacity: 1 !important;
+        color: #eab308; /* Yellow-500 */
+        background: white;
+        border-color: #eab308;
+    }
+    
+    .product-card:hover .shortlist-btn {
+        opacity: 0.7;
+    }
+    
+    .shortlist-btn:hover {
+        opacity: 1 !important;
+        transform: scale(1.1);
+    }
+    
     .card-header {
         display: flex;
         flex-direction: column;
@@ -261,6 +298,14 @@ st.markdown("""
         letter-spacing: -0.01em;
         margin-bottom: 0.75rem;
     }
+    
+    /* Hide the technical sync input */
+    .stTextInput[aria-label="sync_shortlist"] {
+        display: none !important;
+    }
+    div[data-testid="stTextInput"]:has(input[aria-label="sync_shortlist"]) {
+        display: none !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -279,6 +324,13 @@ def load_catalogue_data():
 
 data = load_catalogue_data()
 
+# --- Shortlist Session State ---
+if 'shortlist' not in st.session_state:
+    st.session_state.shortlist = set() # Store Part Numbers for uniqueness
+
+if 'view_shortlist' not in st.session_state:
+    st.session_state.view_shortlist = False
+
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
     if not thumb_path: return None
@@ -295,6 +347,19 @@ def get_base64_img(thumb_path):
     except Exception:
         pass
     return None
+
+# --- Shortlist Sync Bridge ---
+# This catches the signal from JS to update session state
+shortlist_msg = st.sidebar.empty() # Placeholder for any feedback
+sync_val = st.text_input("sync_shortlist", key="sync_shortlist", label_visibility="collapsed")
+if sync_val:
+    if sync_val in st.session_state.shortlist:
+        st.session_state.shortlist.remove(sync_val)
+    else:
+        st.session_state.shortlist.add(sync_val)
+    # Clear the input so it doesn't trigger again on refresh
+    # We use a dummy key change or rerun
+    st.rerun()
 
 # Sidebar - Filtering
 st.sidebar.title("")
@@ -337,40 +402,127 @@ if df.empty or "Collection Type" not in df.columns:
 # Filtering State
 # Dynamic Type options based on data
 type_options = get_options("Type", df)
-col_type = st.sidebar.selectbox("Type", type_options)
-filtered_df = df[df["Type"] == col_type] if col_type != "All" else df
+selected_types = st.sidebar.multiselect("Type", type_options[1:], help="Select multiple product types") # Skip "All" for multiselect
+filtered_df = df[df["Type"].isin(selected_types)] if selected_types else df
 
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
-series = st.sidebar.selectbox("Series", get_options("Collection Type", filtered_df))
-if series != "All":
-    filtered_df = filtered_df[filtered_df["Collection Type"] == series]
+series_options = get_options("Collection Type", filtered_df)
+selected_series = st.sidebar.multiselect("Series", series_options[1:], help="Select multiple series")
+if selected_series:
+    filtered_df = filtered_df[filtered_df["Collection Type"].isin(selected_series)]
 
-col_name = st.sidebar.selectbox("Collection", get_options("Collection", filtered_df))
-if col_name != "All":
-    filtered_df = filtered_df[filtered_df["Collection"] == col_name]
+collection_options = get_options("Collection", filtered_df)
+selected_collections = st.sidebar.multiselect("Collection", collection_options[1:], help="Select multiple collections")
+if selected_collections:
+    filtered_df = filtered_df[filtered_df["Collection"].isin(selected_collections)]
 
-# Furniture specific filters - only show if available in filtered data
+# Furniture specific filters
 arm_opts = get_options("Arm/Table-Top", filtered_df)
 if len(arm_opts) > 1:
-    arm = st.sidebar.selectbox("Arm/Table-Top", arm_opts)
-    if arm != "All":
-        filtered_df = filtered_df[filtered_df["Arm/Table-Top"] == arm]
+    selected_arms = st.sidebar.multiselect("Arm/Table-Top", arm_opts[1:])
+    if selected_arms:
+        filtered_df = filtered_df[filtered_df["Arm/Table-Top"].isin(selected_arms)]
 
 product_opts = get_options("Product", filtered_df)
 if len(product_opts) > 1:
-    product = st.sidebar.selectbox("Product", product_opts)
-    if product != "All":
-        filtered_df = filtered_df[filtered_df["Product"] == product]
+    selected_products = st.sidebar.multiselect("Product", product_opts[1:])
+    if selected_products:
+        filtered_df = filtered_df[filtered_df["Product"].isin(selected_products)]
 
 panel_opts = get_options("Panel", filtered_df)
-if len(panel_opts) > 1: # Only show if there are actual options besides "All"
-    panel = st.sidebar.selectbox("Panel", panel_opts)
-    if panel != "All":
-        filtered_df = filtered_df[filtered_df["Panel"] == panel]
+if len(panel_opts) > 1:
+    selected_panels = st.sidebar.multiselect("Panel", panel_opts[1:])
+    if selected_panels:
+        filtered_df = filtered_df[filtered_df["Panel"].isin(selected_panels)]
 
-color = st.sidebar.selectbox("Color", get_options("Color", filtered_df))
-if color != "All":
-    filtered_df = filtered_df[filtered_df["Color"] == color]
+color_opts = get_options("Color", filtered_df)
+selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
+if selected_colors:
+    filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
+
+# --- Shortlist Management ---
+st.sidebar.divider()
+st.sidebar.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
+
+# View Shortlist Only Toggle
+view_mode = st.sidebar.toggle("View Shortlist Only", value=st.session_state.view_shortlist)
+st.session_state.view_shortlist = view_mode
+
+if st.session_state.view_shortlist:
+    filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
+
+# Clear Shortlist Button
+if st.sidebar.button("Clear All", use_container_state=True if 'use_container_state' in dir(st) else False):
+    st.session_state.shortlist = set()
+    st.rerun()
+
+# --- Export Section ---
+if len(st.session_state.shortlist) > 0:
+    st.sidebar.divider()
+    st.sidebar.markdown("### 📥 Export Shortlist")
+    export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "CSV", "PDF Gallery", "Text Summary"])
+    
+    shortlist_data = df[df["Part Number"].isin(st.session_state.shortlist)]
+    
+    if export_format == "CSV":
+        csv_data = shortlist_data.to_csv(index=False).encode('utf-8')
+        st.sidebar.download_button("Download CSV", data=csv_data, file_name="NC_Shortlist.csv", mime="text/csv")
+    elif export_format == "Text Summary":
+        txt_data = "\n".join(shortlist_data["Part Number"].tolist())
+        st.sidebar.download_button("Download Text", data=txt_data, file_name="NC_Shortlist.txt", mime="text/plain")
+    elif export_format == "Excel (.xlsx)":
+        # Note: Requires openpyxl
+        try:
+            import io
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                shortlist_data.to_excel(writer, index=False)
+            st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        except Exception as e:
+            st.sidebar.error("Excel Export failed. Please ensure 'openpyxl' is installed.")
+    elif export_format == "PDF Gallery":
+        try:
+            from fpdf import FPDF
+            
+            class PDF(FPDF):
+                def header(self):
+                    self.set_font('helvetica', 'B', 15)
+                    self.cell(0, 10, 'NorthCape - Product Shortlist', 0, 1, 'C')
+                    self.ln(5)
+            
+            pdf = PDF()
+            pdf.add_page()
+            pdf.set_font("helvetica", size=10)
+            
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            thumb_dir = os.path.join(base_dir, "static", "thumbnails")
+            
+            for _, item in shortlist_data.iterrows():
+                # Add Image if available
+                thumb_path = item.get('Local_Thumbnail')
+                if thumb_path:
+                    fname = os.path.basename(thumb_path)
+                    abs_thumb = os.path.join(thumb_dir, fname)
+                    if os.path.exists(abs_thumb):
+                        # Draw image (x, y, w)
+                        pdf.image(abs_thumb, x=10, w=40)
+                        pdf.ln(2)
+                
+                pdf.set_x(10)
+                pdf.set_font('helvetica', 'B', 12)
+                pdf.cell(0, 8, f"{item['Part Number']} - {item['Collection']}", ln=True)
+                pdf.set_font('helvetica', '', 10)
+                pdf.cell(0, 6, f"Color: {item.get('Color', 'N/A')} | Type: {item.get('Type', 'N/A')}", ln=True)
+                pdf.ln(10)
+                
+                # Check for page break
+                if pdf.get_y() > 250:
+                    pdf.add_page()
+                
+            pdf_data = pdf.output()
+            st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NC_Shortlist.pdf", mime="application/pdf")
+        except Exception as e:
+            st.sidebar.error(f"PDF Error: {str(e)}")
 
 # Main Content - Premium Header
 st.markdown("""
@@ -440,6 +592,11 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     
     img_src = b64_images[0] if b64_images else ""
     
+    # Check if item is shortlisted
+    is_shortlisted = item["Part Number"] in st.session_state.shortlist
+    shortlist_class = "active" if is_shortlisted else ""
+    shortlist_icon = "⭐" if is_shortlisted else "☆"
+
     # Store list as Base64-encoded JSON to avoid any HTML attribute mangling
     b64_json_str = json.dumps(b64_images)
     b64_data_attr = base64.b64encode(b64_json_str.encode()).decode()
@@ -493,6 +650,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
             f'<div class="image-container">'
                 f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0">'
                 f'{swap_html}'
+                f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Shortlist">{shortlist_icon}</div>'
             f'</div>'
             f'<div class="card-footer">'
                 f'{detail_rows_html}'
@@ -541,7 +699,40 @@ js_swap_html = """
             console.error("Swap Error:", err);
         }
     };
+    
+    const shortlistHandler = function(e) {
+        const btn = e.target.closest('.shortlist-btn');
+        if (!btn) return;
+        
+        const part = btn.getAttribute('data-part');
+        // Find the hidden Streamlit input in the main document
+        // Streamlit text_inputs are usually inside a data-testid="stTextInput"
+        const inputs = parentDoc.querySelectorAll('input');
+        let syncInput = null;
+        for (let input of inputs) {
+            // We look for our sync_shortlist input
+            // Streamlit sometimes prefixes or hides it, so we check values or labels
+            if (input.getAttribute('aria-label') === 'sync_shortlist' || input.value === '') {
+                syncInput = input;
+                // Break if it's the right one (we can check proximity or other attributes)
+            }
+        }
+        
+        // Better way: Streamlit inputs have a predictable structure
+        const targetInput = parentDoc.querySelector('input[aria-label="sync_shortlist"]');
+        if (targetInput) {
+            // Set value and trigger 'Enter' to notify Streamlit
+            targetInput.value = part;
+            targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            targetInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, keyCode: 13, key: 'Enter' }));
+            console.log("Shortlist Sycned:", part);
+        } else {
+            console.error("Shortlist Error: Sync input not found");
+        }
+    };
+    
     parentDoc.addEventListener('click', handler, true);
+    parentDoc.addEventListener('click', shortlistHandler, true);
 })();
 </script>
 """
