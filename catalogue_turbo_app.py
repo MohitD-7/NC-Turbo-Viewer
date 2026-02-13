@@ -312,13 +312,12 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Invisible Sync Input */
-    [data-testid="stSidebar"] div[data-testid="stTextInput"]:has(input[aria-label="sync_bridge_input"]) {
+    /* Invisible Sync Input - Positioned far off screen but still 'available' to DOM */
+    div[data-testid="stTextInput"]:has(input[placeholder="sync_bridge_v7"]) {
         position: fixed;
-        left: -10000px;
-        top: -10000px;
-        height: 0;
-        width: 0;
+        left: -100vw;
+        top: -100vh;
+        z-index: -9999;
         opacity: 0;
         pointer-events: none;
     }
@@ -366,11 +365,10 @@ def get_base64_img(thumb_path):
         pass
     return None
 
-# --- Shortlist Sync Bridge (Ultra Robust with Key-Rotation) ---
-# Moving to sidebar to avoid cluttering main view and improve isolation
-with st.sidebar:
-    sync_key = f"sync_shortlist_v{st.session_state.sync_counter}"
-    sync_val = st.text_input("sync_bridge_input", key=sync_key, label_visibility="collapsed")
+# --- Shortlist Sync Bridge (V7 - Ultra Robust) ---
+sync_key = f"sync_v7_{st.session_state.sync_counter}"
+# Using a unique placeholder is the most reliable way for JS to find the input
+sync_val = st.text_input("sync_bridge", placeholder="sync_bridge_v7", key=sync_key, label_visibility="collapsed")
 
 if sync_val and "|" in sync_val:
     try:
@@ -821,70 +819,61 @@ js_swap_html = """
         }
     };
     
-    // 2. Shortlist Toggle Handler
+    // 2. Shortlist Toggle Handler (V7 - Event Aggression)
     const shortlistHandler = function(e) {
         const btn = e.target.closest('.shortlist-btn');
         if (!btn) return;
         
         const part = btn.getAttribute('data-part');
-        console.log("NC: Star Clicked", part);
+        console.log("NC Checklist: Star Toggled for", part);
         
-        // Find input more aggressively
-        let targetInput = parentDoc.querySelector('input[aria-label="sync_bridge_input"]');
-        if (!targetInput) {
-            const allInputs = parentDoc.querySelectorAll('[data-testid="stSidebar"] input');
-            for (let i of allInputs) {
-                if (i.ariaLabel === "sync_bridge_input") { targetInput = i; break; }
-            }
-        }
+        // Find input by unique placeholder
+        let targetInput = parentDoc.querySelector('input[placeholder="sync_bridge_v7"]');
         
         if (targetInput) {
-            btn.style.backgroundColor = '#fef08a'; // Visual click confirm
-            btn.style.transform = 'scale(1.2)';
+            btn.style.backgroundColor = '#fef08a'; // Immediate feedback
+            btn.style.transform = 'scale(0.8)';
             
-            const val = part + "|" + Date.now();
+            const syncValue = part + "|" + Date.now();
             
-            // Force React State Sync
+            // 1. Focus the input
+            targetInput.focus();
+            
+            // 2. Set value via native setter (React compliance)
             const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            setter.call(targetInput, val);
+            setter.call(targetInput, syncValue);
             
+            // 3. Dispatch events to trigger change detection
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             
-            // Critical: Trigger Enter via KeyboardEvent
-            const ev = new KeyboardEvent('keydown', {
-                bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13
+            // 4. Force submit via Enter key
+            const enterEv = new KeyboardEvent('keydown', {
+                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
             });
-            targetInput.dispatchEvent(ev);
+            targetInput.dispatchEvent(enterEv);
             
-            console.log("NC: Shortlist Toggle Sent");
+            // 5. Blur to finalize
+            targetInput.blur();
+            
+            console.log("NC Checklist: V7 Bridge Sent Toggle Signal");
             
             setTimeout(() => {
                 btn.style.backgroundColor = '';
                 btn.style.transform = '';
             }, 500);
         } else {
-            console.error("NC: Sync Input not found");
-            // If input not found, try a page-wide search as fallback
-            const inputs = parentDoc.querySelectorAll('input');
-            console.log("NC: Found total inputs:", inputs.length);
+            console.error("NC Checklist Error: V7 Sync Input not found in DOM");
         }
     };
     
-    // 3. Persistent Attachment via MutationObserver
-    // This ensures that even if Streamlit re-renders parts of the DOM, we stay attached
-    if (!parentDoc._nc_observer) {
-        parentDoc.addEventListener('click', handler, true);
-        parentDoc.addEventListener('click', shortlistHandler, true);
-        
-        parentDoc._nc_observer = new MutationObserver(() => {
-            // Check if we need to re-verify or refresh anything
-            // Usually not needed for capture-phase clicks on document,
-            // but we keep the observer to signal persistence
-        });
-        parentDoc._nc_observer.observe(parentDoc.body, { childList: true, subtree: true });
-        console.log("NC: Robust Listeners V6 Attached");
-    }
+    // 3. Persistent Connection via V7 Flag
+    if (parentDoc._nc_v7_active) return;
+    parentDoc._nc_v7_active = true;
+
+    parentDoc.addEventListener('click', handler, true);
+    parentDoc.addEventListener('click', shortlistHandler, true);
+    console.log("NC Checklist: V7 Listeners Active");
 })();
 </script>
 """
