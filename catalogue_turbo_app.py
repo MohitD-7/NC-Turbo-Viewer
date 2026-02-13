@@ -160,6 +160,18 @@ st.markdown("""
         pointer-events: auto !important;
     }
     
+    .shortlist-btn:hover {
+        transform: scale(1.1);
+        background: #fff;
+        opacity: 1;
+        box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+    }
+    
+    .shortlist-btn:active {
+        transform: scale(0.9);
+        background: #f1f5f9;
+    }
+    
     .shortlist-btn.active {
         opacity: 1 !important;
         color: #eab308; /* Yellow-500 */
@@ -357,12 +369,18 @@ def get_base64_img(thumb_path):
 # Using a visible label ensures it's always in the DOM for JS to find
 sync_val = st.text_input("sync_shortlist", key="sync_shortlist", label_visibility="visible")
 if sync_val and "|" in sync_val:
-    part = sync_val.split("|")[0]
-    if part in st.session_state.shortlist:
-        st.session_state.shortlist.remove(part)
-    else:
-        st.session_state.shortlist.add(part)
-    st.rerun()
+    try:
+        part = sync_val.split("|")[0]
+        if part in st.session_state.shortlist:
+            st.session_state.shortlist.remove(part)
+        else:
+            st.session_state.shortlist.add(part)
+        
+        # CLEAR the value so it doesn't trigger again
+        st.session_state.sync_shortlist = ""
+        st.rerun()
+    except Exception as e:
+        pass
 
 # Sidebar - Filtering
 st.sidebar.title("")
@@ -827,6 +845,10 @@ js_swap_html = """
         }
         
         if (targetInput) {
+            // Visual feedback - temporary color change
+            btn.style.backgroundColor = '#e2e8f0';
+            btn.style.transform = 'scale(0.9)';
+            
             // Set value with timestamp to ensure it's always "different" to Streamlit
             targetInput.value = part + "|" + Date.now();
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -838,13 +860,27 @@ js_swap_html = """
             });
             targetInput.dispatchEvent(enterEvent);
             console.log("Shortlist Synced:", part);
+            
+            // Revert visual feedback after a short delay
+            setTimeout(() => {
+                btn.style.backgroundColor = '';
+                btn.style.transform = '';
+            }, 200);
         } else {
             console.error("Shortlist Error: Sync input 'sync_shortlist' not found");
         }
     };
     
+    // Prevent duplicate listeners
+    if (parentDoc._nc_shortlist_listener_attached) {
+        console.log("NC: Listeners already attached");
+        return;
+    }
+    parentDoc._nc_shortlist_listener_attached = true;
+
     parentDoc.addEventListener('click', handler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
+    console.log("NC: Event Listeners Attached to Parent");
 })();
 </script>
 """
