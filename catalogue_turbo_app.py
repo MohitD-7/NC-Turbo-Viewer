@@ -570,42 +570,54 @@ if len(st.session_state.shortlist) > 0:
                     current_col = 0
                     current_row = 0
                 
-                x = margin + (current_col * (col_width + gutter))
-                y = pdf.get_y() + (current_row * row_height)
+                # x = margin + (current_col * (col_width + gutter))
+                # y = 30 + (current_row * row_height) # Start below header
                 
-                # If it's a new row but not a new page, adjust Y
-                # Actually, simplified grid logic:
-                x = margin + (current_col * (col_width + gutter))
-                y = 30 + (current_row * row_height) # Start below header
+                cell_x = margin + (current_col * (col_width + gutter))
+                cell_y = 30 + (current_row * row_height)
                 
-                # 1. Part Number (Multi-cell to prevent merging)
-                pdf.set_xy(x, y)
+                # 1. Image (Now FIRST and Zoomed)
+                thumb_path = item.get('Local_Thumbnail')
+                img_y_offset = cell_y
+                if thumb_path:
+                    fname = os.path.basename(thumb_path)
+                    abs_thumb = os.path.join(thumb_dir, fname)
+                    if os.path.exists(abs_thumb):
+                        # 125% zoom: Original was col_width-10 (50), now ~62.5
+                        # But col_width is 60, so we'll center it and use 58 to avoid gutter overlap
+                        img_w = 58 
+                        img_x = cell_x + (col_width - img_w) / 2
+                        pdf.image(abs_thumb, x=img_x, y=cell_y, w=img_w)
+                        img_y_offset += 42 # Height of image (approx)
+                
+                # 2. Part Number (Multi-cell)
+                pdf.set_xy(cell_x, img_y_offset + 2)
                 pdf.set_font('helvetica', 'B', 8)
                 pdf.set_text_color(15, 23, 42)
-                # Use multi_cell for wrapping long part numbers
                 pdf.multi_cell(col_width, 4, str(item['Part Number']), ln=0, align='C')
                 
-                new_y = pdf.get_y() + 2
+                details_y = pdf.get_y() + 1
                 
-                # 2. Details (Centered)
+                # 3. Details (Centered, Product before Color)
                 pdf.set_font('helvetica', '', 7)
                 product_val = str(item.get('Product', '')).lower()
                 is_table = 'table' in product_val
                 
                 fields = [
                     ("Type", item.get('Type')),
-                    ("Collection", item.get('Collection'))
+                    ("Collection", item.get('Collection')),
+                    ("Product", item.get('Product'))
                 ]
+                
                 if not is_table:
                     fields.append(("Color", item.get('Color')))
                 
                 fields.extend([
-                    ("Product", item.get('Product')),
                     ("Arm/Table-Top", item.get('Arm/Table-Top')),
                     ("Panel", item.get('Panel'))
                 ])
                 
-                pdf.set_xy(x, new_y)
+                pdf.set_xy(cell_x, details_y)
                 details_text = ""
                 for label, val in fields:
                     if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
@@ -613,17 +625,6 @@ if len(st.session_state.shortlist) > 0:
                 
                 pdf.set_text_color(100, 116, 139)
                 pdf.multi_cell(col_width, 3.5, details_text, ln=0, align='C')
-                
-                curr_y = pdf.get_y() + 2
-                
-                # 3. Image (Below Text)
-                thumb_path = item.get('Local_Thumbnail')
-                if thumb_path:
-                    fname = os.path.basename(thumb_path)
-                    abs_thumb = os.path.join(thumb_dir, fname)
-                    if os.path.exists(abs_thumb):
-                        # Center image in column
-                        pdf.image(abs_thumb, x=x+5, y=curr_y, w=col_width-10)
                 
                 # Move to next column/row
                 current_col += 1
