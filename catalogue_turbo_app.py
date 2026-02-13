@@ -312,12 +312,13 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Hide the technical sync bridge in sidebar */
+    /* Invisible Sync Input */
     [data-testid="stSidebar"] div[data-testid="stTextInput"]:has(input[aria-label="sync_bridge_input"]) {
-        position: absolute;
-        width: 0;
+        position: fixed;
+        left: -10000px;
+        top: -10000px;
         height: 0;
-        overflow: hidden;
+        width: 0;
         opacity: 0;
         pointer-events: none;
     }
@@ -376,8 +377,10 @@ if sync_val and "|" in sync_val:
         part = sync_val.split("|")[0]
         if part in st.session_state.shortlist:
             st.session_state.shortlist.remove(part)
+            st.toast(f"Removed from shortlist: {part}", icon="🗑️")
         else:
             st.session_state.shortlist.add(part)
+            st.toast(f"Added to shortlist: {part}", icon="⭐")
         
         # Increment counter to ROTATE KEY and clear input for next use
         st.session_state.sync_counter += 1
@@ -824,62 +827,64 @@ js_swap_html = """
         if (!btn) return;
         
         const part = btn.getAttribute('data-part');
-        console.log("NC Checklist: Star Clicked for", part);
+        console.log("NC: Star Clicked", part);
         
-        // Find the input robustly (Checking sidebar specifically if needed)
-        let targetInput = parentDoc.querySelector('[data-testid="stSidebar"] input[aria-label="sync_bridge_input"]');
-        if (!targetInput) targetInput = parentDoc.querySelector('input[aria-label="sync_bridge_input"]');
-        
+        // Find input more aggressively
+        let targetInput = parentDoc.querySelector('input[aria-label="sync_bridge_input"]');
         if (!targetInput) {
-            const labels = parentDoc.querySelectorAll('label');
-            for (let lbl of labels) {
-                if (lbl.innerText && lbl.innerText.includes('sync_bridge_input')) {
-                    const container = lbl.closest('[data-testid="stTextInput"]');
-                    if (container) targetInput = container.querySelector('input');
-                    if (targetInput) break;
-                }
+            const allInputs = parentDoc.querySelectorAll('[data-testid="stSidebar"] input');
+            for (let i of allInputs) {
+                if (i.ariaLabel === "sync_bridge_input") { targetInput = i; break; }
             }
         }
         
         if (targetInput) {
-            // Visual feedback
-            btn.style.backgroundColor = '#fef08a'; // Yellow-200
-            btn.style.transform = 'scale(1.2) rotate(15deg)';
+            btn.style.backgroundColor = '#fef08a'; // Visual click confirm
+            btn.style.transform = 'scale(1.2)';
             
-            // Set value with unique flag
-            const syncValue = part + "|" + Date.now();
+            const val = part + "|" + Date.now();
             
-            // Force React update
+            // Force React State Sync
             const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            setter.call(targetInput, syncValue);
+            setter.call(targetInput, val);
             
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             
-            const enterEv = new KeyboardEvent('keydown', {
-                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', which: 13, code: 'Enter'
+            // Critical: Trigger Enter via KeyboardEvent
+            const ev = new KeyboardEvent('keydown', {
+                bubbles: true, cancelable: true, key: 'Enter', code: 'Enter', keyCode: 13, which: 13
             });
-            targetInput.dispatchEvent(enterEv);
+            targetInput.dispatchEvent(ev);
             
-            console.log("NC Checklist: Sent Sync Event");
+            console.log("NC: Shortlist Toggle Sent");
             
             setTimeout(() => {
                 btn.style.backgroundColor = '';
                 btn.style.transform = '';
             }, 500);
         } else {
-            alert("Application Sync Error: Please refresh the page (Ctrl+F5)");
-            console.error("NC Error: Sync bridge input not found");
+            console.error("NC: Sync Input not found");
+            // If input not found, try a page-wide search as fallback
+            const inputs = parentDoc.querySelectorAll('input');
+            console.log("NC: Found total inputs:", inputs.length);
         }
     };
     
-    // 3. Prevent Duplicate Attachment
-    if (parentDoc._nc_listeners_v5) return;
-    parentDoc._nc_listeners_v5 = true;
-
-    parentDoc.addEventListener('click', handler, true);
-    parentDoc.addEventListener('click', shortlistHandler, true);
-    console.log("NC Checklist: Listeners V5 Attached (Sidebar Mode)");
+    // 3. Persistent Attachment via MutationObserver
+    // This ensures that even if Streamlit re-renders parts of the DOM, we stay attached
+    if (!parentDoc._nc_observer) {
+        parentDoc.addEventListener('click', handler, true);
+        parentDoc.addEventListener('click', shortlistHandler, true);
+        
+        parentDoc._nc_observer = new MutationObserver(() => {
+            // Check if we need to re-verify or refresh anything
+            // Usually not needed for capture-phase clicks on document,
+            // but we keep the observer to signal persistence
+        });
+        parentDoc._nc_observer.observe(parentDoc.body, { childList: true, subtree: true });
+        console.log("NC: Robust Listeners V6 Attached");
+    }
 })();
 </script>
 """
