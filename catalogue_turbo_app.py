@@ -312,14 +312,11 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Hide the technical sync bridge input */
-    div[data-testid="stTextInput"]:has(label:contains("sync_bridge_input")),
+    /* Brutal hiding of the sync bridge container */
     div[data-testid="stTextInput"]:has(input[aria-label="sync_bridge_input"]) {
         position: fixed;
-        top: -100px;
-        left: -100px;
-        width: 1px;
-        height: 1px;
+        left: -5000px;
+        top: -5000px;
         opacity: 0;
         pointer-events: none;
     }
@@ -370,7 +367,8 @@ def get_base64_img(thumb_path):
 # --- Shortlist Sync Bridge (Ultra Robust with Key-Rotation) ---
 # Each sync increments the counter, forcing Streamlit to reset the input and clear visual evidence
 sync_key = f"sync_shortlist_v{st.session_state.sync_counter}"
-sync_val = st.text_input("sync_bridge_input", key=sync_key, label_visibility="visible")
+# label_visibility="hidden" keeps it in DOM for JS but hides visually from users
+sync_val = st.text_input("sync_bridge_input", key=sync_key, label_visibility="hidden")
 
 if sync_val and "|" in sync_val:
     try:
@@ -841,40 +839,48 @@ js_swap_html = """
         }
         
         if (targetInput) {
+            console.log("NC: Found Sync Input, toggling:", part);
+            
             // Visual feedback
             btn.style.backgroundColor = '#e2e8f0';
             btn.style.transform = 'scale(0.85)';
             
             // Set value with unique flag
-            targetInput.value = part + "|" + Date.now();
+            const syncValue = part + "|" + Date.now();
             
-            // Trigger Streamlit
-            targetInput.focus();
+            // Force React to recognize the change
+            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            nativeInputValueSetter.call(targetInput, syncValue);
+            
+            // Dispatch all necessary events in order
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             
+            // Submit via Enter Key
             const enterEv = new KeyboardEvent('keydown', {
-                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', which: 13
+                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', which: 13, code: 'Enter'
             });
             targetInput.dispatchEvent(enterEv);
-            targetInput.blur();
             
             setTimeout(() => {
                 btn.style.backgroundColor = '';
                 btn.style.transform = '';
             }, 300);
         } else {
-            console.error("NC Error: Sync bridge input not found");
+            console.error("NC Error: Sync bridge input not found in DOM");
         }
     };
     
     // 3. Prevent Duplicate Attachment
-    if (parentDoc._nc_listeners_v3) return;
-    parentDoc._nc_listeners_v3 = true;
+    if (parentDoc._nc_listeners_v4) {
+        console.log("NC: Listeners V4 already active");
+        return;
+    }
+    parentDoc._nc_listeners_v4 = true;
 
     parentDoc.addEventListener('click', handler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
-    console.log("NC: Listeners V3 Attached");
+    console.log("NC: Listeners V4 Attached (Force-Update Mode)");
 })();
 </script>
 """
