@@ -474,6 +474,22 @@ if len(st.session_state.shortlist) > 0:
     
     shortlist_data = df[df["Part Number"].isin(st.session_state.shortlist)]
     
+    # Reorder columns as requested by user
+    cols = shortlist_data.columns.tolist()
+    ordered_cols = []
+    
+    # Simple prioritized list for the first few columns
+    # We want: Part Number, Collection, Arm/Table-Top, Product, Panel, Color, Type...
+    priority = ["Part Number", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
+    for p in priority:
+        if p in cols:
+            ordered_cols.append(p)
+            cols.remove(p)
+    
+    # Add remaining columns
+    ordered_cols.extend(cols)
+    shortlist_data = shortlist_data[ordered_cols]
+    
     if export_format == "CSV":
         csv_data = shortlist_data.to_csv(index=False).encode('utf-8')
         st.sidebar.download_button("Download CSV", data=csv_data, file_name="NC_Shortlist.csv", mime="text/csv")
