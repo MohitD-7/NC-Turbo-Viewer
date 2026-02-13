@@ -299,12 +299,14 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Hide the technical sync input */
-    .stTextInput[aria-label="sync_shortlist"] {
-        display: none !important;
-    }
+    /* Hide the technical sync input without breaking JS interaction */
     div[data-testid="stTextInput"]:has(input[aria-label="sync_shortlist"]) {
-        display: none !important;
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
+        opacity: 0;
+        pointer-events: none;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -450,6 +452,13 @@ st.session_state.view_shortlist = view_mode
 
 if st.session_state.view_shortlist:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
+
+# Shortlist All Visible Button
+if not filtered_df.empty:
+    if st.sidebar.button("Shortlist All Visible", use_container_width=True):
+        visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
+        st.session_state.shortlist.update(visible_parts)
+        st.rerun()
 
 # Clear Shortlist Button
 if st.sidebar.button("Clear All", use_container_width=True):
@@ -641,7 +650,8 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
     # Build card HTML with unique ID for image and data-urls for swapping
     card_html = (
-        f'<div class="product-card">'
+        f'<div class="product-card" style="position: relative;">'
+            f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Shortlist">{shortlist_icon}</div>'
             f'<div class="card-header">'
                 f'<div class="badge">{item["Collection Type"]}</div>'
                 f'<div class="part-number">{item["Part Number"]}</div>'
@@ -650,7 +660,6 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
             f'<div class="image-container">'
                 f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0">'
                 f'{swap_html}'
-                f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Shortlist">{shortlist_icon}</div>'
             f'</div>'
             f'<div class="card-footer">'
                 f'{detail_rows_html}'
@@ -719,15 +728,20 @@ js_swap_html = """
         }
         
         // Better way: Streamlit inputs have a predictable structure
+        // We look for the input with the specific aria-label
         const targetInput = parentDoc.querySelector('input[aria-label="sync_shortlist"]');
         if (targetInput) {
-            // Set value and trigger 'Enter' to notify Streamlit
+            // Set value and trigger events to notify Streamlit
             targetInput.value = part;
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+            targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             targetInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, keyCode: 13, key: 'Enter' }));
-            console.log("Shortlist Sycned:", part);
+            console.log("Shortlist Synced:", part);
         } else {
-            console.error("Shortlist Error: Sync input not found");
+            console.error("Shortlist Error: Sync input 'sync_shortlist' not found in parent document");
+            // Fallback: search for any input if the label-based search fails
+            const allInputs = parentDoc.querySelectorAll('input');
+            console.log("Found " + allInputs.length + " total inputs");
         }
     };
     
