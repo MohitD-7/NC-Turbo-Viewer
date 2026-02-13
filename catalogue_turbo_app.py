@@ -588,7 +588,7 @@ if len(st.session_state.shortlist) > 0:
                         img_w = 58 
                         img_x = cell_x + (col_width - img_w) / 2
                         pdf.image(abs_thumb, x=img_x, y=cell_y, w=img_w)
-                        img_y_offset += 42 # Height of image (approx)
+                        img_y_offset += 48 # Increased offset to prevent overlap (original was 42)
                 
                 # 2. Part Number (Multi-cell)
                 pdf.set_xy(cell_x, img_y_offset + 2)
@@ -598,24 +598,25 @@ if len(st.session_state.shortlist) > 0:
                 
                 details_y = pdf.get_y() + 1
                 
-                # 3. Details (Centered, Product before Color)
+                # 3. Details (Reordered: Type, Product, Arm, Panel, Color)
                 pdf.set_font('helvetica', '', 7)
                 product_val = str(item.get('Product', '')).lower()
                 is_table = 'table' in product_val
                 
+                # Requested Order: Type, Product, Arm/Table-Top, Panel, Color
                 fields = [
                     ("Type", item.get('Type')),
-                    ("Collection", item.get('Collection')),
-                    ("Product", item.get('Product'))
+                    ("Product", item.get('Product')),
+                    ("Arm/Table-Top", item.get('Arm/Table-Top')),
+                    ("Panel", item.get('Panel'))
                 ]
                 
                 if not is_table:
                     fields.append(("Color", item.get('Color')))
                 
-                fields.extend([
-                    ("Arm/Table-Top", item.get('Arm/Table-Top')),
-                    ("Panel", item.get('Panel'))
-                ])
+                # Note: Collection is kept but moved to end or omitted if user specifically asked for only those 5
+                # Adding Collection at the end for completeness unless they strictly said NO.
+                fields.append(("Collection", item.get('Collection')))
                 
                 pdf.set_xy(cell_x, details_y)
                 details_text = ""
@@ -623,8 +624,16 @@ if len(st.session_state.shortlist) > 0:
                     if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
                         details_text += f"{label}: {val}\n"
                 
+                # To achieve "Centered Block with Left Aligned Text":
+                # We calculate the block width (e.g. 50mm) and center it in the col_width (60mm)
+                # cell_x is the start of the 60mm col.
+                block_width = 50
+                indent = (col_width - block_width) / 2
+                pdf.set_x(cell_x + indent)
+                
                 pdf.set_text_color(100, 116, 139)
-                pdf.multi_cell(col_width, 3.5, details_text, ln=0, align='C')
+                # Use align='L' inside the centered block width
+                pdf.multi_cell(block_width, 3.5, details_text, ln=0, align='L')
                 
                 # Move to next column/row
                 current_col += 1
