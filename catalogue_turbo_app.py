@@ -512,41 +512,94 @@ if len(st.session_state.shortlist) > 0:
             
             class PDF(FPDF):
                 def header(self):
-                    self.set_font('helvetica', 'B', 15)
-                    self.cell(0, 10, 'NorthCape - Product Shortlist', 0, 1, 'C')
-                    self.ln(5)
+                    self.set_font('helvetica', 'B', 22)
+                    self.set_text_color(30, 64, 175) # Premium Blue
+                    self.cell(0, 15, 'NORTHCAPE CATALOGUE', 0, 1, 'C')
+                    self.set_draw_color(226, 232, 240) # Slate-200
+                    self.line(10, 25, 200, 25)
+                    self.ln(10)
+                    
+                def footer(self):
+                    self.set_y(-15)
+                    self.set_font('helvetica', 'I', 8)
+                    self.set_text_color(148, 163, 184)
+                    self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
             
             pdf = PDF()
             pdf.add_page()
-            pdf.set_font("helvetica", size=10)
             
             base_dir = os.path.dirname(os.path.abspath(__file__))
             thumb_dir = os.path.join(base_dir, "static", "thumbnails")
             
-            for _, item in shortlist_data.iterrows():
-                # Add Image if available
+            # Grid Settings
+            margin = 10
+            col_width = 60
+            gutter = 5
+            row_height = 85
+            current_col = 0
+            
+            start_x = margin
+            start_y = pdf.get_y()
+            
+            for i, (_, item) in enumerate(shortlist_data.iterrows()):
+                # Check for page break
+                if pdf.get_y() + row_height > 270:
+                    pdf.add_page()
+                    start_y = pdf.get_y()
+                    current_col = 0
+                
+                x = start_x + (current_col * (col_width + gutter))
+                y = pdf.get_y()
+                
+                # Image Box (Square-ish)
+                pdf.set_fill_color(255, 255, 255)
+                pdf.rect(x, y, col_width, 50, 'F')
+                
                 thumb_path = item.get('Local_Thumbnail')
                 if thumb_path:
                     fname = os.path.basename(thumb_path)
                     abs_thumb = os.path.join(thumb_dir, fname)
                     if os.path.exists(abs_thumb):
-                        # Draw image (x, y, w)
-                        pdf.image(abs_thumb, x=10, w=40)
-                        pdf.ln(2)
+                        # Center image in box
+                        pdf.image(abs_thumb, x=x+2, y=y+2, w=col_width-4)
                 
-                pdf.set_x(10)
-                pdf.set_font('helvetica', 'B', 12)
-                pdf.cell(0, 8, f"{item['Part Number']} - {item['Collection']}", ln=True)
-                pdf.set_font('helvetica', '', 10)
-                pdf.cell(0, 6, f"Color: {item.get('Color', 'N/A')} | Type: {item.get('Type', 'N/A')}", ln=True)
-                pdf.ln(10)
+                # Text Data Area
+                pdf.set_xy(x, y + 52)
+                pdf.set_font('helvetica', 'B', 10)
+                pdf.set_text_color(15, 23, 42) # Near Black
+                pdf.cell(col_width, 6, str(item['Part Number']), ln=True, align='L')
                 
-                # Check for page break
-                if pdf.get_y() > 250:
-                    pdf.add_page()
+                # Details
+                pdf.set_font('helvetica', '', 7)
+                fields = [
+                    ("Collection", item.get('Collection')),
+                    ("Type", item.get('Type')),
+                    ("Color", item.get('Color')),
+                    ("Product", item.get('Product')),
+                    ("Arm/Table-Top", item.get('Arm/Table-Top')),
+                    ("Panel", item.get('Panel'))
+                ]
                 
+                for label, val in fields:
+                    if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
+                        pdf.set_x(x)
+                        pdf.set_text_color(100, 116, 139) # Grey Label
+                        pdf.write(4, f"{label}: ")
+                        pdf.set_text_color(15, 23, 42) # Black Value
+                        pdf.set_font('helvetica', 'B', 7)
+                        pdf.write(4, f"{val}\n")
+                        pdf.set_font('helvetica', '', 7)
+                
+                # Move to next column or row
+                current_col += 1
+                if current_col >= 3:
+                    current_col = 0
+                    pdf.set_y(y + row_height)
+                else:
+                    pdf.set_xy(x + col_width + gutter, y)
+
             pdf_data = bytes(pdf.output())
-            st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NC_Shortlist.pdf", mime="application/pdf")
+            st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf")
         except Exception as e:
             st.sidebar.error(f"PDF Error: {str(e)}")
 
