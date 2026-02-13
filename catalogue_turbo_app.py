@@ -547,6 +547,7 @@ if len(st.session_state.shortlist) > 0:
                     self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
             
             pdf = PDF()
+            pdf.set_auto_page_break(auto=False, margin=0)
             pdf.add_page()
             
             base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -597,25 +598,31 @@ if len(st.session_state.shortlist) > 0:
                 
                 details_y = pdf.get_y() + 1
                 
-                # 3. Details (Reordered: Type, Product, Arm, Panel, Color)
+                # 3. Details (Conditional Ordering)
                 pdf.set_font('helvetica', '', 7)
+                st_type = str(item.get('Type', '')).strip()
                 product_val = str(item.get('Product', '')).lower()
                 is_table = 'table' in product_val
                 
-                # Requested Order: Type, Product, Arm/Table-Top, Panel, Color
-                fields = [
-                    ("Type", item.get('Type')),
-                    ("Product", item.get('Product')),
-                    ("Arm/Table-Top", item.get('Arm/Table-Top')),
-                    ("Panel", item.get('Panel'))
-                ]
-                
-                if not is_table:
-                    fields.append(("Color", item.get('Color')))
-                
-                # Note: Collection is kept but moved to end or omitted if user specifically asked for only those 5
-                # Adding Collection at the end for completeness unless they strictly said NO.
-                fields.append(("Collection", item.get('Collection')))
+                if st_type == "Cushion":
+                    # Cushions: Type, Collection, Color
+                    fields = [
+                        ("Type", item.get('Type')),
+                        ("Collection", item.get('Collection')),
+                        ("Color", item.get('Color'))
+                    ]
+                else:
+                    # Furniture/Default: Type, Product, Arm, Panel, Color
+                    fields = [
+                        ("Type", item.get('Type')),
+                        ("Product", item.get('Product')),
+                        ("Arm/Table-Top", item.get('Arm/Table-Top')),
+                        ("Panel", item.get('Panel'))
+                    ]
+                    if not is_table:
+                        fields.append(("Color", item.get('Color')))
+                    # Collection is secondary for furniture
+                    fields.append(("Collection", item.get('Collection')))
                 
                 pdf.set_xy(cell_x, details_y)
                 details_text = ""
@@ -623,15 +630,12 @@ if len(st.session_state.shortlist) > 0:
                     if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
                         details_text += f"{label}: {val}\n"
                 
-                # To achieve "Centered Block with Left Aligned Text":
-                # We calculate the block width (e.g. 50mm) and center it in the col_width (60mm)
-                # cell_x is the start of the 60mm col.
+                # Centered block with left-aligned labels
                 block_width = 50
                 indent = (col_width - block_width) / 2
                 pdf.set_x(cell_x + indent)
                 
                 pdf.set_text_color(100, 116, 139)
-                # Use align='L' inside the centered block width
                 pdf.multi_cell(block_width, 3.5, details_text, ln=0, align='L')
                 
                 # Move to next column/row
@@ -642,6 +646,15 @@ if len(st.session_state.shortlist) > 0:
 
             pdf_data = bytes(pdf.output())
             st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf")
+            
+            # --- PDF Preview Section ---
+            st.sidebar.divider()
+            st.sidebar.markdown("### 👁️ PDF Preview")
+            if st.sidebar.button("Show Preview"):
+                base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
+                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
+                st.markdown(pdf_display, unsafe_allow_html=True)
+                st.toast("PDF Preview Generated Below!", icon="📄")
         except Exception as e:
             st.sidebar.error(f"PDF Error: {str(e)}")
 
