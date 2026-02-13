@@ -154,9 +154,10 @@ st.markdown("""
         cursor: pointer;
         font-size: 1.2rem;
         box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        z-index: 100;
+        z-index: 999;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         opacity: 0.8;
+        pointer-events: auto !important;
     }
     
     .shortlist-btn.active {
@@ -355,13 +356,12 @@ def get_base64_img(thumb_path):
 # --- Shortlist Sync Bridge ---
 # Using a visible label ensures it's always in the DOM for JS to find
 sync_val = st.text_input("sync_shortlist", key="sync_shortlist", label_visibility="visible")
-if sync_val:
-    if sync_val in st.session_state.shortlist:
-        st.session_state.shortlist.remove(sync_val)
+if sync_val and "|" in sync_val:
+    part = sync_val.split("|")[0]
+    if part in st.session_state.shortlist:
+        st.session_state.shortlist.remove(part)
     else:
-        st.session_state.shortlist.add(sync_val)
-    # Clear the input so it doesn't trigger again on refresh
-    # We use a dummy key change or rerun
+        st.session_state.shortlist.add(part)
     st.rerun()
 
 # Sidebar - Filtering
@@ -827,8 +827,8 @@ js_swap_html = """
         }
         
         if (targetInput) {
-            // Set value and trigger events
-            targetInput.value = part;
+            // Set value with timestamp to ensure it's always "different" to Streamlit
+            targetInput.value = part + "|" + Date.now();
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             
