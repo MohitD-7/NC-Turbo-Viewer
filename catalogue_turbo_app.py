@@ -452,7 +452,7 @@ if st.session_state.view_shortlist:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
 
 # Clear Shortlist Button
-if st.sidebar.button("Clear All", use_container_state=True if 'use_container_state' in dir(st) else False):
+if st.sidebar.button("Clear All", use_container_width=True):
     st.session_state.shortlist = set()
     st.rerun()
 
