@@ -312,16 +312,16 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Hide the technical sync input without breaking accessibility for JS */
-    div[data-testid="stTextInput"]:has(label[aria-label="sync_shortlist_label"]),
-    div[data-testid="stTextInput"]:has(input[aria-label="sync_shortlist"]) {
-        position: absolute;
-        width: 0;
-        height: 0;
-        overflow: hidden;
+    /* Hide the technical sync bridge input */
+    div[data-testid="stTextInput"]:has(label:contains("sync_bridge_input")),
+    div[data-testid="stTextInput"]:has(input[aria-label="sync_bridge_input"]) {
+        position: fixed;
+        top: -100px;
+        left: -100px;
+        width: 1px;
+        height: 1px;
         opacity: 0;
         pointer-events: none;
-        z-index: -1;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -347,6 +347,8 @@ if 'shortlist' not in st.session_state:
 
 if 'view_shortlist' not in st.session_state:
     st.session_state.view_shortlist = False
+if "sync_counter" not in st.session_state:
+    st.session_state.sync_counter = 0
 
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
@@ -365,9 +367,11 @@ def get_base64_img(thumb_path):
         pass
     return None
 
-# --- Shortlist Sync Bridge ---
-# Using a visible label ensures it's always in the DOM for JS to find
-sync_val = st.text_input("sync_shortlist", key="sync_shortlist", label_visibility="visible")
+# --- Shortlist Sync Bridge (Ultra Robust with Key-Rotation) ---
+# Each sync increments the counter, forcing Streamlit to reset the input and clear visual evidence
+sync_key = f"sync_shortlist_v{st.session_state.sync_counter}"
+sync_val = st.text_input("sync_bridge_input", key=sync_key, label_visibility="visible")
+
 if sync_val and "|" in sync_val:
     try:
         part = sync_val.split("|")[0]
@@ -376,10 +380,10 @@ if sync_val and "|" in sync_val:
         else:
             st.session_state.shortlist.add(part)
         
-        # CLEAR the value so it doesn't trigger again
-        st.session_state.sync_shortlist = ""
+        # Increment counter to ROTATE KEY and clear input for next use
+        st.session_state.sync_counter += 1
         st.rerun()
-    except Exception as e:
+    except Exception:
         pass
 
 # Sidebar - Filtering
@@ -786,6 +790,8 @@ js_swap_html = """
 <script>
 (function() {
     const parentDoc = window.parent.document;
+    
+    // 1. Image Swapper Handler
     const handler = function(e) {
         const btn = e.target.closest('.swap-btn');
         if (!btn) return;
@@ -812,75 +818,63 @@ js_swap_html = """
         }
     };
     
+    // 2. Shortlist Toggle Handler
     const shortlistHandler = function(e) {
         const btn = e.target.closest('.shortlist-btn');
         if (!btn) return;
         
         const part = btn.getAttribute('data-part');
-        // Find the hidden Streamlit input in the main document
-        // Streamlit text_inputs are usually inside a data-testid="stTextInput"
-        const inputs = parentDoc.querySelectorAll('input');
-        let syncInput = null;
-        for (let input of inputs) {
-            // We look for our sync_shortlist input
-            // Streamlit sometimes prefixes or hides it, so we check values or labels
-            if (input.getAttribute('aria-label') === 'sync_shortlist' || input.value === '') {
-                syncInput = input;
-                // Break if it's the right one (we can check proximity or other attributes)
-            }
-        }
+        console.log("NC: Shortlist Clicked:", part);
         
-        // Search for the sync input by aria-label or placeholder
-        let targetInput = parentDoc.querySelector('input[aria-label="sync_shortlist"]');
+        // Find the input robustly
+        let targetInput = parentDoc.querySelector('input[aria-label="sync_bridge_input"]');
         
-        // If not found by aria-label, try searching for the label text as a fallback
         if (!targetInput) {
             const labels = parentDoc.querySelectorAll('label');
             for (let lbl of labels) {
-                if (lbl.innerText && lbl.innerText.trim() === 'sync_shortlist') {
+                if (lbl.innerText && lbl.innerText.includes('sync_bridge_input')) {
                     const container = lbl.closest('[data-testid="stTextInput"]');
                     if (container) targetInput = container.querySelector('input');
+                    if (targetInput) break;
                 }
             }
         }
         
         if (targetInput) {
-            // Visual feedback - temporary color change
+            // Visual feedback
             btn.style.backgroundColor = '#e2e8f0';
-            btn.style.transform = 'scale(0.9)';
+            btn.style.transform = 'scale(0.85)';
             
-            // Set value with timestamp to ensure it's always "different" to Streamlit
+            // Set value with unique flag
             targetInput.value = part + "|" + Date.now();
+            
+            // Trigger Streamlit
+            targetInput.focus();
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             
-            // Trigger Enter key
-            const enterEvent = new KeyboardEvent('keydown', {
-                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
+            const enterEv = new KeyboardEvent('keydown', {
+                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', which: 13
             });
-            targetInput.dispatchEvent(enterEvent);
-            console.log("Shortlist Synced:", part);
+            targetInput.dispatchEvent(enterEv);
+            targetInput.blur();
             
-            // Revert visual feedback after a short delay
             setTimeout(() => {
                 btn.style.backgroundColor = '';
                 btn.style.transform = '';
-            }, 200);
+            }, 300);
         } else {
-            console.error("Shortlist Error: Sync input 'sync_shortlist' not found");
+            console.error("NC Error: Sync bridge input not found");
         }
     };
     
-    // Prevent duplicate listeners
-    if (parentDoc._nc_shortlist_listener_attached) {
-        console.log("NC: Listeners already attached");
-        return;
-    }
-    parentDoc._nc_shortlist_listener_attached = true;
+    // 3. Prevent Duplicate Attachment
+    if (parentDoc._nc_listeners_v3) return;
+    parentDoc._nc_listeners_v3 = true;
 
     parentDoc.addEventListener('click', handler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
-    console.log("NC: Event Listeners Attached to Parent");
+    console.log("NC: Listeners V3 Attached");
 })();
 </script>
 """
