@@ -438,10 +438,8 @@ if len(panel_opts) > 1:
     if selected_panels:
         filtered_df = filtered_df[filtered_df["Panel"].isin(selected_panels)]
 
-color_opts = get_options("Color", filtered_df)
-selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
-if selected_colors:
-    filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
+# Color filter removed as requested by user ("table will not have color")
+filtered_df = filtered_df
 
 # --- Shortlist Management ---
 st.sidebar.divider()
@@ -574,7 +572,6 @@ if len(st.session_state.shortlist) > 0:
                 fields = [
                     ("Collection", item.get('Collection')),
                     ("Type", item.get('Type')),
-                    ("Color", item.get('Color')),
                     ("Product", item.get('Product')),
                     ("Arm/Table-Top", item.get('Arm/Table-Top')),
                     ("Panel", item.get('Panel'))
@@ -649,7 +646,7 @@ grid_html = '<div class="card-grid">'
 TECHNICAL_FIELDS = [
     "Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", 
     "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", 
-    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
+    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link", "Color"
 ]
 
 for i, (_, item) in enumerate(paged_data.iterrows()):
