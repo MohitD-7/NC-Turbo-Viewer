@@ -438,8 +438,10 @@ if len(panel_opts) > 1:
     if selected_panels:
         filtered_df = filtered_df[filtered_df["Panel"].isin(selected_panels)]
 
-# Color filter removed as requested by user ("table will not have color")
-filtered_df = filtered_df
+color_opts = get_options("Color", filtered_df)
+selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
+if selected_colors:
+    filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
 
 # --- Shortlist Management ---
 st.sidebar.divider()
@@ -565,27 +567,38 @@ if len(st.session_state.shortlist) > 0:
                 pdf.set_xy(x, y + 52)
                 pdf.set_font('helvetica', 'B', 10)
                 pdf.set_text_color(15, 23, 42) # Near Black
-                pdf.cell(col_width, 6, str(item['Part Number']), ln=True, align='L')
+                pdf.cell(col_width, 6, str(item['Part Number']), ln=True, align='C')
                 
                 # Details
                 pdf.set_font('helvetica', '', 7)
+                
+                # Conditional fields based on product type
+                product_val = str(item.get('Product', '')).lower()
+                is_table = 'table' in product_val
+                
                 fields = [
                     ("Collection", item.get('Collection')),
-                    ("Type", item.get('Type')),
+                    ("Type", item.get('Type'))
+                ]
+                
+                # Add Color only if not a table
+                if not is_table:
+                    fields.append(("Color", item.get('Color')))
+                
+                fields.extend([
                     ("Product", item.get('Product')),
                     ("Arm/Table-Top", item.get('Arm/Table-Top')),
                     ("Panel", item.get('Panel'))
-                ]
+                ])
                 
                 for label, val in fields:
                     if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
                         pdf.set_x(x)
                         pdf.set_text_color(100, 116, 139) # Grey Label
-                        pdf.write(4, f"{label}: ")
-                        pdf.set_text_color(15, 23, 42) # Black Value
-                        pdf.set_font('helvetica', 'B', 7)
-                        pdf.write(4, f"{val}\n")
-                        pdf.set_font('helvetica', '', 7)
+                        # We use multi_cell for centering if needed, but for small grid cells
+                        # a simple cell with align='C' is better for label: value
+                        line_text = f"{label}: {val}"
+                        pdf.cell(col_width, 4, line_text, ln=True, align='C')
                 
                 # Move to next column or row
                 current_col += 1
@@ -646,7 +659,7 @@ grid_html = '<div class="card-grid">'
 TECHNICAL_FIELDS = [
     "Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", 
     "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", 
-    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link", "Color"
+    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
 ]
 
 for i, (_, item) in enumerate(paged_data.iterrows()):
@@ -684,9 +697,14 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
     # Determine fields to display dynamically
     display_fields = []
-    # Identify all keys in the item that are not technical or image-related
+    product_val_card = str(item.get('Product', '')).lower()
+    is_table_card = 'table' in product_val_card
+    
     for key in item.keys():
         if key not in TECHNICAL_FIELDS and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
+            # Special check for Color on Tables
+            if key == "Color" and is_table_card:
+                continue
             val = get_val(key)
             if val:
                 display_fields.append((key, val))
