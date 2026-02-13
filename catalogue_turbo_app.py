@@ -312,11 +312,12 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Brutal hiding of the sync bridge container */
-    div[data-testid="stTextInput"]:has(input[aria-label="sync_bridge_input"]) {
-        position: fixed;
-        left: -5000px;
-        top: -5000px;
+    /* Hide the technical sync bridge in sidebar */
+    [data-testid="stSidebar"] div[data-testid="stTextInput"]:has(input[aria-label="sync_bridge_input"]) {
+        position: absolute;
+        width: 0;
+        height: 0;
+        overflow: hidden;
         opacity: 0;
         pointer-events: none;
     }
@@ -365,10 +366,10 @@ def get_base64_img(thumb_path):
     return None
 
 # --- Shortlist Sync Bridge (Ultra Robust with Key-Rotation) ---
-# Each sync increments the counter, forcing Streamlit to reset the input and clear visual evidence
-sync_key = f"sync_shortlist_v{st.session_state.sync_counter}"
-# label_visibility="hidden" keeps it in DOM for JS but hides visually from users
-sync_val = st.text_input("sync_bridge_input", key=sync_key, label_visibility="hidden")
+# Moving to sidebar to avoid cluttering main view and improve isolation
+with st.sidebar:
+    sync_key = f"sync_shortlist_v{st.session_state.sync_counter}"
+    sync_val = st.text_input("sync_bridge_input", key=sync_key, label_visibility="collapsed")
 
 if sync_val and "|" in sync_val:
     try:
@@ -551,57 +552,49 @@ if len(st.session_state.shortlist) > 0:
             base_dir = os.path.dirname(os.path.abspath(__file__))
             thumb_dir = os.path.join(base_dir, "static", "thumbnails")
             
-            # Grid Settings
+            # 3x3 Grid Settings (A4 is ~210x297mm)
             margin = 10
-            col_width = 60
             gutter = 5
-            row_height = 85
-            current_col = 0
+            col_width = 60
+            row_height = 85 # Fits 3 rows (~255mm + margins)
             
-            start_x = margin
-            start_y = pdf.get_y()
+            items_per_page = 9
+            current_col = 0
+            current_row = 0
             
             for i, (_, item) in enumerate(shortlist_data.iterrows()):
-                # Check for page break
-                if pdf.get_y() + row_height > 270:
+                # New page every 9 items
+                if i > 0 and i % 9 == 0:
                     pdf.add_page()
-                    start_y = pdf.get_y()
                     current_col = 0
+                    current_row = 0
                 
-                x = start_x + (current_col * (col_width + gutter))
-                y = pdf.get_y()
+                x = margin + (current_col * (col_width + gutter))
+                y = pdf.get_y() + (current_row * row_height)
                 
-                # Image Box (Square-ish)
-                pdf.set_fill_color(255, 255, 255)
-                pdf.rect(x, y, col_width, 50, 'F')
+                # If it's a new row but not a new page, adjust Y
+                # Actually, simplified grid logic:
+                x = margin + (current_col * (col_width + gutter))
+                y = 30 + (current_row * row_height) # Start below header
                 
-                thumb_path = item.get('Local_Thumbnail')
-                if thumb_path:
-                    fname = os.path.basename(thumb_path)
-                    abs_thumb = os.path.join(thumb_dir, fname)
-                    if os.path.exists(abs_thumb):
-                        # Center image in box
-                        pdf.image(abs_thumb, x=x+2, y=y+2, w=col_width-4)
+                # 1. Part Number (Multi-cell to prevent merging)
+                pdf.set_xy(x, y)
+                pdf.set_font('helvetica', 'B', 8)
+                pdf.set_text_color(15, 23, 42)
+                # Use multi_cell for wrapping long part numbers
+                pdf.multi_cell(col_width, 4, str(item['Part Number']), ln=0, align='C')
                 
-                # Text Data Area
-                pdf.set_xy(x, y + 52)
-                pdf.set_font('helvetica', 'B', 10)
-                pdf.set_text_color(15, 23, 42) # Near Black
-                pdf.cell(col_width, 6, str(item['Part Number']), ln=True, align='C')
+                new_y = pdf.get_y() + 2
                 
-                # Details
+                # 2. Details (Centered)
                 pdf.set_font('helvetica', '', 7)
-                
-                # Conditional fields based on product type
                 product_val = str(item.get('Product', '')).lower()
                 is_table = 'table' in product_val
                 
                 fields = [
-                    ("Collection", item.get('Collection')),
-                    ("Type", item.get('Type'))
+                    ("Type", item.get('Type')),
+                    ("Collection", item.get('Collection'))
                 ]
-                
-                # Add Color only if not a table
                 if not is_table:
                     fields.append(("Color", item.get('Color')))
                 
@@ -611,22 +604,31 @@ if len(st.session_state.shortlist) > 0:
                     ("Panel", item.get('Panel'))
                 ])
                 
+                pdf.set_xy(x, new_y)
+                details_text = ""
                 for label, val in fields:
                     if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
-                        pdf.set_x(x)
-                        pdf.set_text_color(100, 116, 139) # Grey Label
-                        # We use multi_cell for centering if needed, but for small grid cells
-                        # a simple cell with align='C' is better for label: value
-                        line_text = f"{label}: {val}"
-                        pdf.cell(col_width, 4, line_text, ln=True, align='C')
+                        details_text += f"{label}: {val}\n"
                 
-                # Move to next column or row
+                pdf.set_text_color(100, 116, 139)
+                pdf.multi_cell(col_width, 3.5, details_text, ln=0, align='C')
+                
+                curr_y = pdf.get_y() + 2
+                
+                # 3. Image (Below Text)
+                thumb_path = item.get('Local_Thumbnail')
+                if thumb_path:
+                    fname = os.path.basename(thumb_path)
+                    abs_thumb = os.path.join(thumb_dir, fname)
+                    if os.path.exists(abs_thumb):
+                        # Center image in column
+                        pdf.image(abs_thumb, x=x+5, y=curr_y, w=col_width-10)
+                
+                # Move to next column/row
                 current_col += 1
                 if current_col >= 3:
                     current_col = 0
-                    pdf.set_y(y + row_height)
-                else:
-                    pdf.set_xy(x + col_width + gutter, y)
+                    current_row += 1
 
             pdf_data = bytes(pdf.output())
             st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf")
@@ -822,10 +824,11 @@ js_swap_html = """
         if (!btn) return;
         
         const part = btn.getAttribute('data-part');
-        console.log("NC: Shortlist Clicked:", part);
+        console.log("NC Checklist: Star Clicked for", part);
         
-        // Find the input robustly
-        let targetInput = parentDoc.querySelector('input[aria-label="sync_bridge_input"]');
+        // Find the input robustly (Checking sidebar specifically if needed)
+        let targetInput = parentDoc.querySelector('[data-testid="stSidebar"] input[aria-label="sync_bridge_input"]');
+        if (!targetInput) targetInput = parentDoc.querySelector('input[aria-label="sync_bridge_input"]');
         
         if (!targetInput) {
             const labels = parentDoc.querySelectorAll('label');
@@ -839,48 +842,44 @@ js_swap_html = """
         }
         
         if (targetInput) {
-            console.log("NC: Found Sync Input, toggling:", part);
-            
             // Visual feedback
-            btn.style.backgroundColor = '#e2e8f0';
-            btn.style.transform = 'scale(0.85)';
+            btn.style.backgroundColor = '#fef08a'; // Yellow-200
+            btn.style.transform = 'scale(1.2) rotate(15deg)';
             
             // Set value with unique flag
             const syncValue = part + "|" + Date.now();
             
-            // Force React to recognize the change
-            const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            nativeInputValueSetter.call(targetInput, syncValue);
+            // Force React update
+            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            setter.call(targetInput, syncValue);
             
-            // Dispatch all necessary events in order
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
             
-            // Submit via Enter Key
             const enterEv = new KeyboardEvent('keydown', {
                 bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', which: 13, code: 'Enter'
             });
             targetInput.dispatchEvent(enterEv);
             
+            console.log("NC Checklist: Sent Sync Event");
+            
             setTimeout(() => {
                 btn.style.backgroundColor = '';
                 btn.style.transform = '';
-            }, 300);
+            }, 500);
         } else {
-            console.error("NC Error: Sync bridge input not found in DOM");
+            alert("Application Sync Error: Please refresh the page (Ctrl+F5)");
+            console.error("NC Error: Sync bridge input not found");
         }
     };
     
     // 3. Prevent Duplicate Attachment
-    if (parentDoc._nc_listeners_v4) {
-        console.log("NC: Listeners V4 already active");
-        return;
-    }
-    parentDoc._nc_listeners_v4 = true;
+    if (parentDoc._nc_listeners_v5) return;
+    parentDoc._nc_listeners_v5 = true;
 
     parentDoc.addEventListener('click', handler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
-    console.log("NC: Listeners V4 Attached (Force-Update Mode)");
+    console.log("NC Checklist: Listeners V5 Attached (Sidebar Mode)");
 })();
 </script>
 """
