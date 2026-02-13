@@ -141,22 +141,22 @@ st.markdown("""
     /* Shortlist Button */
     .shortlist-btn {
         position: absolute;
-        top: 8px;
-        right: 8px;
-        background: rgba(255, 255, 255, 0.9);
+        top: 6px;
+        right: 6px;
+        background: rgba(255, 255, 255, 0.95);
         border: 1px solid #e2e8f0;
         border-radius: 50%;
-        width: 32px;
-        height: 32px;
+        width: 34px;
+        height: 34px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-size: 1.1rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        z-index: 10;
-        transition: all 0.2s;
-        opacity: 0;
+        font-size: 1.2rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        z-index: 100;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        opacity: 0.8;
     }
     
     .shortlist-btn.active {
@@ -299,7 +299,8 @@ st.markdown("""
         margin-bottom: 0.75rem;
     }
     
-    /* Hide the technical sync input without breaking JS interaction */
+    /* Hide the technical sync input without breaking accessibility for JS */
+    div[data-testid="stTextInput"]:has(label[aria-label="sync_shortlist_label"]),
     div[data-testid="stTextInput"]:has(input[aria-label="sync_shortlist"]) {
         position: absolute;
         width: 0;
@@ -307,6 +308,7 @@ st.markdown("""
         overflow: hidden;
         opacity: 0;
         pointer-events: none;
+        z-index: -1;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -351,9 +353,8 @@ def get_base64_img(thumb_path):
     return None
 
 # --- Shortlist Sync Bridge ---
-# This catches the signal from JS to update session state
-shortlist_msg = st.sidebar.empty() # Placeholder for any feedback
-sync_val = st.text_input("sync_shortlist", key="sync_shortlist", label_visibility="collapsed")
+# Using a visible label ensures it's always in the DOM for JS to find
+sync_val = st.text_input("sync_shortlist", key="sync_shortlist", label_visibility="visible")
 if sync_val:
     if sync_val in st.session_state.shortlist:
         st.session_state.shortlist.remove(sync_val)
@@ -727,21 +728,34 @@ js_swap_html = """
             }
         }
         
-        // Better way: Streamlit inputs have a predictable structure
-        // We look for the input with the specific aria-label
-        const targetInput = parentDoc.querySelector('input[aria-label="sync_shortlist"]');
+        // Search for the sync input by aria-label or placeholder
+        let targetInput = parentDoc.querySelector('input[aria-label="sync_shortlist"]');
+        
+        // If not found by aria-label, try searching for the label text as a fallback
+        if (!targetInput) {
+            const labels = parentDoc.querySelectorAll('label');
+            for (let lbl of labels) {
+                if (lbl.innerText && lbl.innerText.trim() === 'sync_shortlist') {
+                    const container = lbl.closest('[data-testid="stTextInput"]');
+                    if (container) targetInput = container.querySelector('input');
+                }
+            }
+        }
+        
         if (targetInput) {
-            // Set value and trigger events to notify Streamlit
+            // Set value and trigger events
             targetInput.value = part;
             targetInput.dispatchEvent(new Event('input', { bubbles: true }));
             targetInput.dispatchEvent(new Event('change', { bubbles: true }));
-            targetInput.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, keyCode: 13, key: 'Enter' }));
+            
+            // Trigger Enter key
+            const enterEvent = new KeyboardEvent('keydown', {
+                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
+            });
+            targetInput.dispatchEvent(enterEvent);
             console.log("Shortlist Synced:", part);
         } else {
-            console.error("Shortlist Error: Sync input 'sync_shortlist' not found in parent document");
-            // Fallback: search for any input if the label-based search fails
-            const allInputs = parentDoc.querySelectorAll('input');
-            console.log("Found " + allInputs.length + " total inputs");
+            console.error("Shortlist Error: Sync input 'sync_shortlist' not found");
         }
     };
     
