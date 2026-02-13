@@ -380,9 +380,8 @@ if sync_val and "|" in sync_val:
             st.session_state.shortlist.add(part)
             st.toast(f"Added to shortlist: {part}", icon="⭐")
         
-        # Increment counter to ROTATE KEY and clear input for next use
+        # Increment counter to ROTATE KEY for next time (handled by Streamlit's natural rerun)
         st.session_state.sync_counter += 1
-        st.rerun()
     except Exception:
         pass
 
