@@ -545,7 +545,7 @@ if len(st.session_state.shortlist) > 0:
                 if pdf.get_y() > 250:
                     pdf.add_page()
                 
-            pdf_data = pdf.output()
+            pdf_data = bytes(pdf.output())
             st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NC_Shortlist.pdf", mime="application/pdf")
         except Exception as e:
             st.sidebar.error(f"PDF Error: {str(e)}")
