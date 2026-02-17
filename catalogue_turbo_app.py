@@ -518,41 +518,62 @@ if len(st.session_state.shortlist) > 0:
         txt_data = "\n".join(shortlist_data["Part Number"].tolist())
         st.sidebar.download_button("Download Text", data=txt_data, file_name="NC_Shortlist.txt", mime="text/plain")
     elif export_format == "Excel (.xlsx)":
-        # Note: Requires openpyxl
+        # Note: Requires openpyxl and pandas
         try:
             import io
+            import glob
             output = io.BytesIO()
             
-            # Group by Collection Type (which corresponds to the original sheet names in the input Excel)
-            unique_collections = shortlist_data["Collection Type"].unique()
+            # Get the absolute base directory
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+            excel_files = glob.glob(os.path.join(base_dir, "*.xlsx"))
+            
+            # Use original df to get fresh data (bypassing any earlier reordering)
+            export_df = df[df["Part Number"].isin(st.session_state.shortlist)].copy()
+            unique_types = export_df["Collection Type"].unique()
             
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                # Common technical columns to exclude from export
-                tech_cols = ["Local_Thumbnail", "Image_List", "Part Number_Link", "Color_Link", "Collection Type"]
-                
-                for collection in unique_collections:
-                    # Filter data for this collection
-                    sheet_df = shortlist_data[shortlist_data["Collection Type"] == collection].copy()
+                for coll_type in unique_types:
+                    parts_in_coll = export_df[export_df["Collection Type"] == coll_type]["Part Number"].tolist()
                     
-                    # Remove technical columns
-                    cols_to_keep = [c for c in sheet_df.columns if c not in tech_cols]
-                    sheet_df = sheet_df[cols_to_keep]
+                    # Try to find the exact original data from the master Excel files
+                    source_df = None
+                    for f in excel_files:
+                        try:
+                            xl = pd.ExcelFile(f)
+                            if coll_type in xl.sheet_names:
+                                full_sheet_df = pd.read_excel(f, sheet_name=coll_type)
+                                # Filter by selected Part Numbers
+                                source_df = full_sheet_df[full_sheet_df["Part Number"].isin(parts_in_coll)]
+                                break
+                        except Exception:
+                            continue
                     
-                    # Ensure sheet name is valid for Excel (max 31 characters, no special chars)
-                    sheet_name = str(collection)
-                    # Simple sanitization
-                    invalid_chars = ['[', ']', ':', '*', '?', '/', '\\']
-                    for char in invalid_chars:
-                        sheet_name = sheet_name.replace(char, '')
-                    sheet_name = sheet_name[:31]
+                    # If found in master files, use that for 100% fidelity
+                    if source_df is not None:
+                        final_sheet_df = source_df.copy()
+                    else:
+                        # Fallback to internal data if master file not found
+                        final_sheet_df = export_df[export_df["Collection Type"] == coll_type].copy()
+                        # Cleanup technical columns for fallback
+                        tech_cols = ["Local_Thumbnail", "Image_List", "Part Number_Link", "Color_Link", "Collection Type"]
+                        cols_to_keep = [c for c in final_sheet_df.columns if c not in tech_cols]
+                        final_sheet_df = final_sheet_df[cols_to_keep]
                     
-                    # Write to the specific sheet
-                    sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                    # REQUIREMENT: Keep Part Number as the first column
+                    cols = final_sheet_df.columns.tolist()
+                    if "Part Number" in cols:
+                        cols.insert(0, cols.pop(cols.index("Part Number")))
+                        final_sheet_df = final_sheet_df[cols]
+                    
+                    # Sanitize sheet name
+                    sheet_name = "".join([c for c in str(coll_type) if c not in r'[]:*?/\ '])[:31]
+                    final_sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
                     
             st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
             st.sidebar.error(f"Excel Export failed: {str(e)}")
-            st.sidebar.info("Please ensure 'openpyxl' is installed.")
+            st.sidebar.info("Ensure source Excel files are in the app directory.")
     elif export_format == "PDF Gallery":
         try:
             from fpdf import FPDF
