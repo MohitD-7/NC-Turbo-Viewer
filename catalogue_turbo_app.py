@@ -553,28 +553,25 @@ if len(st.session_state.shortlist) > 0:
                     # Use source data for fidelity, or fallback
                     final_sheet_df = source_df.copy() if source_df is not None else parts_subset.copy()
                     
-                    # 1. DROP unwanted columns (including "Thumbnail" as requested)
-                    drop_cols = ["Thumbnail", "Local_Thumbnail", "Image_List", "Part Number_Link", "Collection Type"]
+                    # 1. DROP unwanted columns (including "Thumbnail" and "_thumbnail_path")
+                    drop_cols = ["Thumbnail", "_thumbnail_path", "Local_Thumbnail", "Image_List", "Part Number_Link", "Collection Type"]
                     final_sheet_df = final_sheet_df.drop(columns=[c for c in drop_cols if c in final_sheet_df.columns])
                     
-                    # 2. Add Color_Link if missing (needed for hyperlinks)
+                    # 2. Add Color_Link if missing (needed for hyperlinks, will be removed later)
                     if "Color_Link" not in final_sheet_df.columns:
-                        # Merge selectively to avoid column clutter
                         link_map = export_df[["Part Number", "Color_Link"]].drop_duplicates()
                         final_sheet_df = final_sheet_df.merge(link_map, on="Part Number", how="left")
                     
                     # 3. STRICT ORDERING
                     cols = final_sheet_df.columns.tolist()
-                    # Part Number First
                     if "Part Number" in cols:
                         cols.insert(0, cols.pop(cols.index("Part Number")))
                     
-                    # Arm/Table-Top before Product, Panel after Product
                     if "Product" in cols:
                         p_idx = cols.index("Product")
                         if "Arm/Table-Top" in cols:
                             cols.insert(p_idx, cols.pop(cols.index("Arm/Table-Top")))
-                            p_idx = cols.index("Product") # Update index
+                            p_idx = cols.index("Product")
                         if "Panel" in cols:
                             cols.insert(p_idx + 1, cols.pop(cols.index("Panel")))
                     
@@ -584,12 +581,25 @@ if len(st.session_state.shortlist) > 0:
                     sheet_name = "".join([c for c in str(coll_type) if c not in r'[]:*?/\ '])[:31]
                     final_sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
                     
-                    # 5. POST-PROCESS for HYPERLINKS
+                    # 5. POST-PROCESS for HYPERLINKS, STYLES, and VISIBILITY
                     workbook = writer.book
                     worksheet = writer.sheets[sheet_name]
+                    from openpyxl.styles import Font
                     
+                    # Auto-width all columns
+                    for col in worksheet.columns:
+                        max_length = 0
+                        column_letter = col[0].column_letter
+                        for cell in col:
+                            if cell.value:
+                                max_length = max(max_length, len(str(cell.value)))
+                        worksheet.column_dimensions[column_letter].width = min(max_length + 2, 60)
+
                     # Determine which color column to use
                     color_col_name = "Cushion Color" if coll_type == "Cushions" else "Color"
+                    
+                    # Standard hyperlink style with font size 11
+                    h_font = Font(size=11, underline='single', color='0563C1')
                     
                     if color_col_name in final_sheet_df.columns and "Color_Link" in final_sheet_df.columns:
                         c_idx = final_sheet_df.columns.get_loc(color_col_name) + 1
@@ -600,11 +610,25 @@ if len(st.session_state.shortlist) > 0:
                             if link_val and str(link_val).startswith("http"):
                                 cell = worksheet.cell(row=row_num, column=c_idx)
                                 cell.hyperlink = link_val
-                                cell.style = "Hyperlink"
+                                cell.font = h_font
                                 
-                        # Hide the Link column to keep it clean
-                        l_letter = openpyxl.utils.get_column_letter(l_idx)
-                        worksheet.column_dimensions[l_letter].visible = False
+                        # REMOVE the Link column (actually delete it as requested)
+                        worksheet.delete_cols(l_idx)
+                        
+                    # HIDE Dropbox Folder Path if present
+                    if "Dropbox Folder Path" in final_sheet_df.columns:
+                        path_idx = final_sheet_df.columns.get_loc("Dropbox Folder Path") + 1
+                        # Note: If Color_Link was before this and deleted, indices shift. 
+                        # But final_sheet_df indices are still correct for original layout.
+                        # Since we delete Color_Link (which is usually at the end), we should be safe or re-check.
+                        # Better: calculate index based on existing columns in worksheet or re-check from DF.
+                        # Re-calculate indices after potential deletion
+                        current_headers = [cell.value for cell in worksheet[1]]
+                        if "Dropbox Folder Path" in current_headers:
+                            p_idx_ws = current_headers.index("Dropbox Folder Path") + 1
+                            worksheet.column_dimensions[openpyxl.utils.get_column_letter(p_idx_ws)].visible = False
+                    
+            st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                     
             st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
