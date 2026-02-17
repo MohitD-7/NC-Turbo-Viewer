@@ -522,6 +522,7 @@ if len(st.session_state.shortlist) > 0:
         try:
             import io
             import glob
+            import openpyxl.utils
             output = io.BytesIO()
             
             # Get the absolute base directory
@@ -534,7 +535,8 @@ if len(st.session_state.shortlist) > 0:
             
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 for coll_type in unique_types:
-                    parts_in_coll = export_df[export_df["Collection Type"] == coll_type]["Part Number"].tolist()
+                    parts_subset = export_df[export_df["Collection Type"] == coll_type]
+                    parts_list = parts_subset["Part Number"].tolist()
                     
                     # Try to find the exact original data from the master Excel files
                     source_df = None
@@ -542,33 +544,67 @@ if len(st.session_state.shortlist) > 0:
                         try:
                             xl = pd.ExcelFile(f)
                             if coll_type in xl.sheet_names:
-                                full_sheet_df = pd.read_excel(f, sheet_name=coll_type)
-                                # Filter by selected Part Numbers
-                                source_df = full_sheet_df[full_sheet_df["Part Number"].isin(parts_in_coll)]
+                                source_df = pd.read_excel(f, sheet_name=coll_type)
+                                source_df = source_df[source_df["Part Number"].isin(parts_list)]
                                 break
                         except Exception:
                             continue
                     
-                    # If found in master files, use that for 100% fidelity
-                    if source_df is not None:
-                        final_sheet_df = source_df.copy()
-                    else:
-                        # Fallback to internal data if master file not found
-                        final_sheet_df = export_df[export_df["Collection Type"] == coll_type].copy()
-                        # Cleanup technical columns for fallback
-                        tech_cols = ["Local_Thumbnail", "Image_List", "Part Number_Link", "Color_Link", "Collection Type"]
-                        cols_to_keep = [c for c in final_sheet_df.columns if c not in tech_cols]
-                        final_sheet_df = final_sheet_df[cols_to_keep]
+                    # Use source data for fidelity, or fallback
+                    final_sheet_df = source_df.copy() if source_df is not None else parts_subset.copy()
                     
-                    # REQUIREMENT: Keep Part Number as the first column
+                    # 1. DROP unwanted columns (including "Thumbnail" as requested)
+                    drop_cols = ["Thumbnail", "Local_Thumbnail", "Image_List", "Part Number_Link", "Collection Type"]
+                    final_sheet_df = final_sheet_df.drop(columns=[c for c in drop_cols if c in final_sheet_df.columns])
+                    
+                    # 2. Add Color_Link if missing (needed for hyperlinks)
+                    if "Color_Link" not in final_sheet_df.columns:
+                        # Merge selectively to avoid column clutter
+                        link_map = export_df[["Part Number", "Color_Link"]].drop_duplicates()
+                        final_sheet_df = final_sheet_df.merge(link_map, on="Part Number", how="left")
+                    
+                    # 3. STRICT ORDERING
                     cols = final_sheet_df.columns.tolist()
+                    # Part Number First
                     if "Part Number" in cols:
                         cols.insert(0, cols.pop(cols.index("Part Number")))
-                        final_sheet_df = final_sheet_df[cols]
                     
-                    # Sanitize sheet name
+                    # Arm/Table-Top before Product, Panel after Product
+                    if "Product" in cols:
+                        p_idx = cols.index("Product")
+                        if "Arm/Table-Top" in cols:
+                            cols.insert(p_idx, cols.pop(cols.index("Arm/Table-Top")))
+                            p_idx = cols.index("Product") # Update index
+                        if "Panel" in cols:
+                            cols.insert(p_idx + 1, cols.pop(cols.index("Panel")))
+                    
+                    final_sheet_df = final_sheet_df[cols]
+                    
+                    # 4. Write to sheet
                     sheet_name = "".join([c for c in str(coll_type) if c not in r'[]:*?/\ '])[:31]
                     final_sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                    
+                    # 5. POST-PROCESS for HYPERLINKS
+                    workbook = writer.book
+                    worksheet = writer.sheets[sheet_name]
+                    
+                    # Determine which color column to use
+                    color_col_name = "Cushion Color" if coll_type == "Cushions" else "Color"
+                    
+                    if color_col_name in final_sheet_df.columns and "Color_Link" in final_sheet_df.columns:
+                        c_idx = final_sheet_df.columns.get_loc(color_col_name) + 1
+                        l_idx = final_sheet_df.columns.get_loc("Color_Link") + 1
+                        
+                        for row_num in range(2, len(final_sheet_df) + 2):
+                            link_val = worksheet.cell(row=row_num, column=l_idx).value
+                            if link_val and str(link_val).startswith("http"):
+                                cell = worksheet.cell(row=row_num, column=c_idx)
+                                cell.hyperlink = link_val
+                                cell.style = "Hyperlink"
+                                
+                        # Hide the Link column to keep it clean
+                        l_letter = openpyxl.utils.get_column_letter(l_idx)
+                        worksheet.column_dimensions[l_letter].visible = False
                     
             st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
