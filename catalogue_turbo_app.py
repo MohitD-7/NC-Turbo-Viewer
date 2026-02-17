@@ -522,11 +522,37 @@ if len(st.session_state.shortlist) > 0:
         try:
             import io
             output = io.BytesIO()
+            
+            # Group by Collection Type (which corresponds to the original sheet names in the input Excel)
+            unique_collections = shortlist_data["Collection Type"].unique()
+            
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                shortlist_data.to_excel(writer, index=False)
+                # Common technical columns to exclude from export
+                tech_cols = ["Local_Thumbnail", "Image_List", "Part Number_Link", "Color_Link", "Collection Type"]
+                
+                for collection in unique_collections:
+                    # Filter data for this collection
+                    sheet_df = shortlist_data[shortlist_data["Collection Type"] == collection].copy()
+                    
+                    # Remove technical columns
+                    cols_to_keep = [c for c in sheet_df.columns if c not in tech_cols]
+                    sheet_df = sheet_df[cols_to_keep]
+                    
+                    # Ensure sheet name is valid for Excel (max 31 characters, no special chars)
+                    sheet_name = str(collection)
+                    # Simple sanitization
+                    invalid_chars = ['[', ']', ':', '*', '?', '/', '\\']
+                    for char in invalid_chars:
+                        sheet_name = sheet_name.replace(char, '')
+                    sheet_name = sheet_name[:31]
+                    
+                    # Write to the specific sheet
+                    sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                    
             st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         except Exception as e:
-            st.sidebar.error("Excel Export failed. Please ensure 'openpyxl' is installed.")
+            st.sidebar.error(f"Excel Export failed: {str(e)}")
+            st.sidebar.info("Please ensure 'openpyxl' is installed.")
     elif export_format == "PDF Gallery":
         try:
             from fpdf import FPDF
