@@ -491,7 +491,7 @@ if st.sidebar.button("Clear All", use_container_width=True):
 if len(st.session_state.shortlist) > 0:
     st.sidebar.divider()
     st.sidebar.markdown("### 📥 Export Shortlist")
-    export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "CSV", "PDF Gallery", "Text Summary"])
+    export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "PDF Gallery"])
     
     shortlist_data = df[df["Part Number"].isin(st.session_state.shortlist)]
     
@@ -511,13 +511,7 @@ if len(st.session_state.shortlist) > 0:
     ordered_cols.extend(cols)
     shortlist_data = shortlist_data[ordered_cols]
     
-    if export_format == "CSV":
-        csv_data = shortlist_data.to_csv(index=False).encode('utf-8')
-        st.sidebar.download_button("Download CSV", data=csv_data, file_name="NC_Shortlist.csv", mime="text/csv")
-    elif export_format == "Text Summary":
-        txt_data = "\n".join(shortlist_data["Part Number"].tolist())
-        st.sidebar.download_button("Download Text", data=txt_data, file_name="NC_Shortlist.txt", mime="text/plain")
-    elif export_format == "Excel (.xlsx)":
+    if export_format == "Excel (.xlsx)":
         # Note: Requires openpyxl and pandas
         try:
             import io
@@ -630,7 +624,7 @@ if len(st.session_state.shortlist) > 0:
                     
             st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
                     
-            st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
         except Exception as e:
             st.sidebar.error(f"Excel Export failed: {str(e)}")
             st.sidebar.info("Ensure source Excel files are in the app directory.")
