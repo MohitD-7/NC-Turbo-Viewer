@@ -511,12 +511,25 @@ st.markdown("""
        MOBILE APP EXPERIENCE (Bottom Navigation)
        ============================================ */
     @media (max-width: 767px) {
-        /* Move sidebar off-screen on mobile (but keep in DOM for cloning) */
+        /* Hide sidebar initially on mobile */
         [data-testid="stSidebar"] {
             position: fixed !important;
-            left: -9999px !important;
-            top: -9999px !important;
-            visibility: hidden !important;
+            left: 0 !important;
+            top: 0 !important;
+            bottom: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            z-index: 2001 !important;
+            background: white !important;
+            transform: translateY(100%) !important;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+            overflow-y: auto !important;
+        }
+
+        /* Show sidebar when modal is open */
+        .filter-modal.open ~ [data-testid="stSidebar"],
+        body.filters-open [data-testid="stSidebar"] {
+            transform: translateY(0) !important;
         }
 
         /* Hamburger Filter Button - Bottom Left */
@@ -546,59 +559,7 @@ st.markdown("""
             background: #2563eb;
         }
 
-        /* Filter Modal/Drawer */
-        .filter-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: white;
-            z-index: 2000;
-            overflow-y: auto;
-            transform: translateY(100%);
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            display: none;
-        }
-
-        .filter-modal.open {
-            transform: translateY(0);
-            display: block;
-        }
-
-        .filter-modal-header {
-            position: sticky;
-            top: 0;
-            background: white;
-            padding: 16px;
-            border-bottom: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            z-index: 10;
-        }
-
-        .filter-modal-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: #1e293b;
-        }
-
-        .filter-modal-close {
-            font-size: 1.75rem;
-            color: #64748b;
-            cursor: pointer;
-            padding: 4px 12px;
-            background: none;
-            border: none;
-        }
-
-        .filter-modal-content {
-            padding: 16px;
-            padding-bottom: 100px;
-        }
-
-        /* Backdrop for modal */
+        /* Backdrop for filters */
         .filter-backdrop {
             position: fixed;
             top: 0;
@@ -606,12 +567,31 @@ st.markdown("""
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.5);
-            z-index: 1999;
+            z-index: 2000;
             display: none;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 20px;
         }
 
         .filter-backdrop.open {
-            display: block;
+            display: flex;
+        }
+
+        .filter-close-btn {
+            background: white;
+            color: #1e293b;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        }
+
+        .filter-close-btn:active {
+            transform: scale(0.95);
         }
 
         /* Thinner scrollbar */
@@ -972,22 +952,14 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Mobile Filter Button and Modal - HTML (visible in page)
+# Mobile Filter Button and Backdrop - HTML (visible in page)
 mobile_filter_html = """
 <button class="mobile-filter-btn" id="mobile-filter-button">
     ☰
 </button>
 
-<div class="filter-backdrop" id="filter-backdrop"></div>
-
-<div class="filter-modal" id="filter-modal">
-    <div class="filter-modal-header">
-        <div class="filter-modal-title">Filters</div>
-        <button class="filter-modal-close" id="close-filters">×</button>
-    </div>
-    <div class="filter-modal-content" id="mobile-filter-container">
-        <!-- Sidebar content will be cloned here -->
-    </div>
+<div class="filter-backdrop" id="filter-backdrop">
+    <button class="filter-close-btn" id="close-filters">× Close</button>
 </div>
 """
 st.markdown(mobile_filter_html, unsafe_allow_html=True)
@@ -999,29 +971,13 @@ mobile_filter_js = """
     const parentDoc = window.parent.document;
 
     function toggleFilters() {
-        const modal = parentDoc.querySelector('#filter-modal');
         const backdrop = parentDoc.querySelector('#filter-backdrop');
+        const body = parentDoc.body;
 
-        if (modal && backdrop) {
-            const isOpen = modal.classList.contains('open');
-
-            if (!isOpen) {
-                // Clone sidebar content when opening
-                const sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
-                const modalContent = parentDoc.querySelector('#mobile-filter-container');
-
-                if (sidebar && modalContent) {
-                    const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
-                    if (sidebarContent) {
-                        modalContent.innerHTML = sidebarContent.innerHTML;
-                    } else {
-                        modalContent.innerHTML = sidebar.innerHTML;
-                    }
-                }
-            }
-
-            modal.classList.toggle('open');
+        if (backdrop && body) {
+            // Toggle classes
             backdrop.classList.toggle('open');
+            body.classList.toggle('filters-open');
         }
     }
 
