@@ -581,19 +581,30 @@ st.markdown("""
         }
 
         .filter-close-btn {
-            background: white;
-            color: #1e293b;
+            background: rgba(255, 255, 255, 0.95);
+            color: #64748b;
             border: none;
-            padding: 12px 24px;
-            border-radius: 24px;
-            font-size: 1rem;
-            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 0.8rem;
+            font-weight: 500;
             cursor: pointer;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.15);
         }
 
         .filter-close-btn:active {
             transform: scale(0.95);
+        }
+
+        /* Swipe handle for pull-down gesture */
+        [data-testid="stSidebar"]::before {
+            content: '';
+            display: block;
+            width: 40px;
+            height: 4px;
+            background: #cbd5e1;
+            border-radius: 2px;
+            margin: 12px auto 8px;
         }
 
         /* Thinner scrollbar */
@@ -1005,6 +1016,47 @@ mobile_filter_js = """
             if (e.target === backdrop) {
                 toggleFilters();
             }
+        });
+    }
+
+    // Swipe-down gesture to close filters
+    const sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
+    if (sidebar) {
+        let startY = 0;
+        let currentY = 0;
+        let isDragging = false;
+
+        sidebar.addEventListener('touchstart', function(e) {
+            if (parentDoc.body.classList.contains('filters-open')) {
+                startY = e.touches[0].clientY;
+                isDragging = true;
+            }
+        });
+
+        sidebar.addEventListener('touchmove', function(e) {
+            if (!isDragging) return;
+            currentY = e.touches[0].clientY;
+            const diff = currentY - startY;
+
+            // Only allow dragging down
+            if (diff > 0) {
+                sidebar.style.transform = `translateY(${diff}px)`;
+            }
+        });
+
+        sidebar.addEventListener('touchend', function(e) {
+            if (!isDragging) return;
+            isDragging = false;
+
+            const diff = currentY - startY;
+
+            // If dragged more than 100px, close the filters
+            if (diff > 100) {
+                toggleFilters();
+            }
+
+            // Reset transform
+            sidebar.style.transform = '';
         });
     }
 })();
