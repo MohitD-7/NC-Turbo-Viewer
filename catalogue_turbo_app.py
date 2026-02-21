@@ -633,6 +633,27 @@ st.markdown("""
             border-radius: 0 !important;
         }
 
+        /* Fix sidebar width and make multiselect wrap */
+        [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
+            width: 100% !important;
+        }
+
+        /* Make multiselect items wrap to multiple lines */
+        [data-testid="stSidebar"] [data-baseweb="select"] > div {
+            flex-wrap: wrap !important;
+        }
+
+        [data-testid="stSidebar"] [data-baseweb="tag"] {
+            max-width: 100% !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+
+        /* Ensure multiselect container doesn't expand sidebar */
+        [data-testid="stSidebar"] div[data-baseweb="select"] {
+            max-width: 100% !important;
+        }
+
         /* Hide swipe handle on desktop */
         [data-testid="stSidebar"]::before {
             display: none !important;
