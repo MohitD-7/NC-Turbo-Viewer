@@ -1019,34 +1019,60 @@ mobile_filter_js = """
         });
     }
 
-    // Swipe-down gesture to close filters
+    // Swipe-down gesture to close filters (only from top area)
     const sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
     if (sidebar) {
         let startY = 0;
+        let startX = 0;
         let currentY = 0;
         let isDragging = false;
+        let hasStartedDrag = false;
 
         sidebar.addEventListener('touchstart', function(e) {
             if (parentDoc.body.classList.contains('filters-open')) {
                 startY = e.touches[0].clientY;
-                isDragging = true;
+                startX = e.touches[0].clientX;
+                currentY = startY;
+                isDragging = false;
+                hasStartedDrag = false;
+
+                // Only enable swipe from top 80px of sidebar
+                const rect = sidebar.getBoundingClientRect();
+                const touchYRelative = startY - rect.top;
+                if (touchYRelative > 80) {
+                    // Don't enable swipe, user is touching content area
+                    return;
+                }
             }
         });
 
         sidebar.addEventListener('touchmove', function(e) {
-            if (!isDragging) return;
-            currentY = e.touches[0].clientY;
-            const diff = currentY - startY;
+            if (!parentDoc.body.classList.contains('filters-open')) return;
 
-            // Only allow dragging down
-            if (diff > 0) {
-                sidebar.style.transform = `translateY(${diff}px)`;
+            currentY = e.touches[0].clientY;
+            const diffY = currentY - startY;
+            const diffX = Math.abs(e.touches[0].clientX - startX);
+
+            // Only start dragging if moved >15px down and <10px horizontally
+            if (!hasStartedDrag && diffY > 15 && diffX < 10) {
+                hasStartedDrag = true;
+                isDragging = true;
             }
-        });
+
+            if (isDragging && diffY > 0) {
+                e.preventDefault();
+                sidebar.style.transform = `translateY(${diffY}px)`;
+            }
+        }, { passive: false });
 
         sidebar.addEventListener('touchend', function(e) {
-            if (!isDragging) return;
+            if (!isDragging) {
+                sidebar.style.transform = '';
+                return;
+            }
+
             isDragging = false;
+            hasStartedDrag = false;
 
             const diff = currentY - startY;
 
