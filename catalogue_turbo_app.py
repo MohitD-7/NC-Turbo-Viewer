@@ -636,22 +636,34 @@ st.markdown("""
         /* Fix sidebar width and make multiselect wrap */
         [data-testid="stSidebar"] [data-testid="stSidebarContent"] {
             width: 100% !important;
+            overflow-x: hidden !important;
         }
 
-        /* Make multiselect items wrap to multiple lines */
-        [data-testid="stSidebar"] [data-baseweb="select"] > div {
+        /* Force multiselect items to wrap - target all possible containers */
+        [data-testid="stSidebar"] [data-baseweb="select"] > div,
+        [data-testid="stSidebar"] [data-baseweb="select"] > div > div,
+        [data-testid="stSidebar"] [data-baseweb="select"] span[data-baseweb="tag"]:first-child {
             flex-wrap: wrap !important;
+            display: flex !important;
         }
 
+        /* Control tag sizing */
         [data-testid="stSidebar"] [data-baseweb="tag"] {
+            max-width: calc(100% - 20px) !important;
+            margin: 2px !important;
+        }
+
+        /* Force the multiselect value container to wrap */
+        [data-testid="stSidebar"] div[class*="ValueContainer"] {
+            flex-wrap: wrap !important;
             max-width: 100% !important;
-            overflow: hidden !important;
-            text-overflow: ellipsis !important;
         }
 
         /* Ensure multiselect container doesn't expand sidebar */
-        [data-testid="stSidebar"] div[data-baseweb="select"] {
+        [data-testid="stSidebar"] div[data-baseweb="select"],
+        [data-testid="stSidebar"] div[class*="multiValue"] {
             max-width: 100% !important;
+            overflow: visible !important;
         }
 
         /* Hide swipe handle on desktop */
