@@ -507,50 +507,171 @@ st.markdown("""
         }
     }
 
-    /* Mobile-Specific UI Improvements */
+    /* ============================================
+       MOBILE APP EXPERIENCE (Bottom Navigation)
+       ============================================ */
     @media (max-width: 767px) {
-        /* Compact sidebar on mobile - 80% width */
+        /* HIDE sidebar completely on mobile */
         [data-testid="stSidebar"] {
-            width: 80% !important;
-            max-width: 320px !important;
+            display: none !important;
         }
 
-        /* Compact sidebar elements */
-        [data-testid="stSidebar"] button {
-            min-height: 40px !important;
-            font-size: 0.85rem;
-            padding: 0.3rem 0.5rem !important;
+        /* Add padding for bottom navigation */
+        .main .block-container {
+            padding-bottom: 80px !important;
         }
 
-        /* Compact multiselect dropdowns */
-        [data-testid="stSidebar"] div[data-baseweb="select"] {
-            font-size: 0.85rem;
+        /* Bottom Navigation Bar */
+        .mobile-bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 65px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            z-index: 1000;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
         }
 
-        /* Compact sidebar labels */
-        [data-testid="stSidebar"] label {
-            font-size: 0.85rem !important;
+        .mobile-nav-tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: #64748b;
+            font-size: 0.75rem;
+            font-weight: 500;
+            background: none;
+            border: none;
+            width: 100%;
         }
 
-        /* Compact sidebar dividers */
-        [data-testid="stSidebar"] hr {
-            margin: 0.5rem 0 !important;
+        .mobile-nav-tab:active {
+            background: #f1f5f9;
         }
 
-        /* Compact sidebar markdown */
-        [data-testid="stSidebar"] h3 {
-            font-size: 0.95rem !important;
-            margin: 0.5rem 0 !important;
+        .mobile-nav-tab.active {
+            color: #3b82f6;
         }
 
-        /* Larger search input in main area */
-        div[data-baseweb="input"] {
-            font-size: 0.95rem !important;
-            min-height: 44px;
+        .mobile-nav-icon {
+            font-size: 1.5rem;
+            margin-bottom: 4px;
         }
 
-        div[data-baseweb="input"] input {
-            font-size: 0.95rem !important;
+        .mobile-nav-tab.active .mobile-nav-icon {
+            color: #3b82f6;
+        }
+
+        /* Floating Filter Button */
+        .mobile-filter-btn {
+            position: fixed;
+            top: 20px;
+            right: 16px;
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            cursor: pointer;
+            z-index: 999;
+            transition: all 0.3s;
+        }
+
+        .mobile-filter-btn:active {
+            transform: scale(0.9);
+            background: #2563eb;
+        }
+
+        /* Filter Modal/Drawer */
+        .filter-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            z-index: 2000;
+            overflow-y: auto;
+            transform: translateY(100%);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            display: none;
+        }
+
+        .filter-modal.open {
+            transform: translateY(0);
+            display: block;
+        }
+
+        .filter-modal-header {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 16px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .filter-modal-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .filter-modal-close {
+            font-size: 1.75rem;
+            color: #64748b;
+            cursor: pointer;
+            padding: 4px 12px;
+            background: none;
+            border: none;
+        }
+
+        .filter-modal-content {
+            padding: 16px;
+            padding-bottom: 100px;
+        }
+
+        /* Backdrop for modal */
+        .filter-backdrop {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1999;
+            display: none;
+        }
+
+        .filter-backdrop.open {
+            display: block;
+        }
+
+        /* Hide tab switcher input */
+        div[data-testid="stTextInput"]:has(input[placeholder="tab_switcher"]) {
+            position: fixed;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
         }
 
         /* Thinner scrollbar */
@@ -584,6 +705,11 @@ if 'view_shortlist' not in st.session_state:
     st.session_state.view_shortlist = False
 if "sync_counter" not in st.session_state:
     st.session_state.sync_counter = 0
+# Mobile navigation state
+if "mobile_tab" not in st.session_state:
+    st.session_state.mobile_tab = "browse"  # browse or shortlist
+if "show_filters" not in st.session_state:
+    st.session_state.show_filters = False
 
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
@@ -705,11 +831,14 @@ if selected_colors:
 st.sidebar.divider()
 st.sidebar.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
 
-# View Shortlist Only Toggle
+# View Shortlist Only Toggle (Desktop sidebar)
 view_mode = st.sidebar.toggle("View Shortlist Only", value=st.session_state.view_shortlist)
 st.session_state.view_shortlist = view_mode
 
-if st.session_state.view_shortlist:
+# Mobile tab navigation - if on shortlist tab, show only shortlisted items
+show_shortlist_only = st.session_state.view_shortlist or (st.session_state.mobile_tab == "shortlist")
+
+if show_shortlist_only:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
 
 # Shortlist All Visible Button
@@ -901,6 +1030,95 @@ st.markdown("""
     <div class="hero-title">NorthCape Image Library</div>
 </div>
 """, unsafe_allow_html=True)
+
+# Mobile Bottom Navigation (only visible on mobile)
+mobile_nav_html = f"""
+<div class="mobile-bottom-nav">
+    <button class="mobile-nav-tab {'active' if st.session_state.mobile_tab == 'browse' else ''}" onclick="switchTab('browse')">
+        <div class="mobile-nav-icon">🏠</div>
+        <div>Browse</div>
+    </button>
+    <button class="mobile-nav-tab {'active' if st.session_state.mobile_tab == 'shortlist' else ''}" onclick="switchTab('shortlist')">
+        <div class="mobile-nav-icon">⭐</div>
+        <div>Shortlist ({len(st.session_state.shortlist)})</div>
+    </button>
+</div>
+
+<button class="mobile-filter-btn" onclick="toggleFilters()">
+    🔍
+</button>
+
+<div class="filter-backdrop" onclick="toggleFilters()"></div>
+
+<div class="filter-modal">
+    <div class="filter-modal-header">
+        <div class="filter-modal-title">Filters</div>
+        <button class="filter-modal-close" onclick="toggleFilters()">×</button>
+    </div>
+    <div class="filter-modal-content" id="mobile-filter-container">
+        <!-- Sidebar content will be cloned here -->
+    </div>
+</div>
+
+<script>
+(function() {{
+    function switchTab(tab) {{
+        const tabInput = document.querySelector('input[placeholder="tab_switcher"]');
+        if (tabInput) {{
+            tabInput.value = tab;
+            tabInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+        }}
+    }}
+
+    function toggleFilters() {{
+        const modal = document.querySelector('.filter-modal');
+        const backdrop = document.querySelector('.filter-backdrop');
+
+        if (modal && backdrop) {{
+            const isOpen = modal.classList.contains('open');
+
+            if (!isOpen) {{
+                // Clone sidebar content into modal when opening
+                const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                const modalContent = document.getElementById('mobile-filter-container');
+
+                if (sidebar && modalContent && modalContent.children.length === 0) {{
+                    // Clone sidebar inner content
+                    const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
+                    if (sidebarContent) {{
+                        modalContent.innerHTML = sidebarContent.innerHTML;
+                    }}
+                }}
+            }}
+
+            modal.classList.toggle('open');
+            backdrop.classList.toggle('open');
+        }}
+    }}
+
+    // Make functions available globally
+    window.switchTab = switchTab;
+    window.toggleFilters = toggleFilters;
+
+    // Update active tab on load
+    const tabs = document.querySelectorAll('.mobile-nav-tab');
+    tabs.forEach(tab => {{
+        tab.addEventListener('click', function() {{
+            tabs.forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+        }});
+    }});
+}})();
+</script>
+"""
+st.markdown(mobile_nav_html, unsafe_allow_html=True)
+
+# Hidden input for tab switching
+tab_switch = st.text_input("", key="tab_switch_input", placeholder="tab_switcher",
+                           label_visibility="collapsed", value=st.session_state.mobile_tab)
+if tab_switch and tab_switch != st.session_state.mobile_tab:
+    st.session_state.mobile_tab = tab_switch
+    st.rerun()
 
 # Search Bar (Match Reference)
 search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
