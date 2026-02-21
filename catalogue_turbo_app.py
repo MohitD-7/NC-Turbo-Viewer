@@ -519,70 +519,14 @@ st.markdown("""
             visibility: hidden !important;
         }
 
-        /* Add padding for bottom navigation */
-        .main .block-container {
-            padding-bottom: 80px !important;
-        }
-
-        /* Bottom Navigation Bar */
-        .mobile-bottom-nav {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 65px;
-            background: white;
-            border-top: 1px solid #e2e8f0;
-            display: flex;
-            justify-content: space-around;
-            align-items: center;
-            z-index: 1000;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-        }
-
-        .mobile-nav-tab {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            text-decoration: none;
-            color: #64748b;
-            font-size: 0.75rem;
-            font-weight: 500;
-            background: none;
-            border: none;
-            width: 100%;
-        }
-
-        .mobile-nav-tab:active {
-            background: #f1f5f9;
-        }
-
-        .mobile-nav-tab.active {
-            color: #3b82f6;
-        }
-
-        .mobile-nav-icon {
-            font-size: 1.5rem;
-            margin-bottom: 4px;
-        }
-
-        .mobile-nav-tab.active .mobile-nav-icon {
-            color: #3b82f6;
-        }
-
-        /* Floating Filter Button - Bottom Left */
+        /* Hamburger Filter Button - Bottom Left */
         .mobile-filter-btn {
             position: fixed;
-            bottom: 75px;
+            bottom: 20px;
             left: 16px;
-            width: 50px;
-            height: 50px;
-            border-radius: 25px;
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
             background: #3b82f6;
             color: white;
             border: none;
@@ -590,7 +534,8 @@ st.markdown("""
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.3rem;
+            font-size: 1.8rem;
+            font-weight: 300;
             cursor: pointer;
             z-index: 999;
             transition: all 0.3s;
@@ -669,14 +614,6 @@ st.markdown("""
             display: block;
         }
 
-        /* Hide tab switcher input */
-        div[data-testid="stTextInput"]:has(input[placeholder="tab_switcher"]) {
-            position: fixed;
-            left: -9999px;
-            opacity: 0;
-            pointer-events: none;
-        }
-
         /* Thinner scrollbar */
         ::-webkit-scrollbar {
             width: 4px;
@@ -685,7 +622,6 @@ st.markdown("""
 
     /* Hide mobile UI elements on desktop */
     @media (min-width: 768px) {
-        .mobile-bottom-nav,
         .mobile-filter-btn,
         .filter-modal,
         .filter-backdrop {
@@ -718,11 +654,6 @@ if 'view_shortlist' not in st.session_state:
     st.session_state.view_shortlist = False
 if "sync_counter" not in st.session_state:
     st.session_state.sync_counter = 0
-# Mobile navigation state
-if "mobile_tab" not in st.session_state:
-    st.session_state.mobile_tab = "browse"  # browse or shortlist
-if "show_filters" not in st.session_state:
-    st.session_state.show_filters = False
 
 # Helper for Base64 Thumbnails (Fixes all Cloud/Local pathing issues)
 def get_base64_img(thumb_path):
@@ -844,14 +775,11 @@ if selected_colors:
 st.sidebar.divider()
 st.sidebar.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
 
-# View Shortlist Only Toggle (Desktop sidebar)
+# View Shortlist Only Toggle
 view_mode = st.sidebar.toggle("View Shortlist Only", value=st.session_state.view_shortlist)
 st.session_state.view_shortlist = view_mode
 
-# Mobile tab navigation - if on shortlist tab, show only shortlisted items
-show_shortlist_only = st.session_state.view_shortlist or (st.session_state.mobile_tab == "shortlist")
-
-if show_shortlist_only:
+if st.session_state.view_shortlist:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
 
 # Shortlist All Visible Button
@@ -1044,21 +972,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Mobile Bottom Navigation (only visible on mobile)
+# Mobile Filter Button (only visible on mobile)
 mobile_nav_html = f"""
-<div class="mobile-bottom-nav">
-    <button class="mobile-nav-tab {'active' if st.session_state.mobile_tab == 'browse' else ''}" onclick="switchTab('browse')">
-        <div class="mobile-nav-icon">🏠</div>
-        <div>Browse</div>
-    </button>
-    <button class="mobile-nav-tab {'active' if st.session_state.mobile_tab == 'shortlist' else ''}" onclick="switchTab('shortlist')">
-        <div class="mobile-nav-icon">⭐</div>
-        <div>Shortlist ({len(st.session_state.shortlist)})</div>
-    </button>
-</div>
-
-<button class="mobile-filter-btn" onclick="toggleFilters()">
-    🔍
+<button class="mobile-filter-btn" id="mobile-filter-button">
+    ☰
 </button>
 
 <div class="filter-backdrop" onclick="toggleFilters()"></div>
@@ -1075,14 +992,6 @@ mobile_nav_html = f"""
 
 <script>
 (function() {{
-    function switchTab(tab) {{
-        const tabInput = document.querySelector('input[placeholder="tab_switcher"]');
-        if (tabInput) {{
-            tabInput.value = tab;
-            tabInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
-        }}
-    }}
-
     function toggleFilters() {{
         const modal = document.querySelector('.filter-modal');
         const backdrop = document.querySelector('.filter-backdrop');
@@ -1114,29 +1023,18 @@ mobile_nav_html = f"""
         }}
     }}
 
-    // Make functions available globally
-    window.switchTab = switchTab;
-    window.toggleFilters = toggleFilters;
+    // Attach click handler to filter button
+    const filterBtn = document.getElementById('mobile-filter-button');
+    if (filterBtn) {{
+        filterBtn.addEventListener('click', toggleFilters);
+    }}
 
-    // Update active tab on load
-    const tabs = document.querySelectorAll('.mobile-nav-tab');
-    tabs.forEach(tab => {{
-        tab.addEventListener('click', function() {{
-            tabs.forEach(t => t.classList.remove('active'));
-            this.classList.add('active');
-        }});
-    }});
+    // Make toggleFilters available globally for backdrop/close button
+    window.toggleFilters = toggleFilters;
 }})();
 </script>
 """
 st.markdown(mobile_nav_html, unsafe_allow_html=True)
-
-# Hidden input for tab switching
-tab_switch = st.text_input("", key="tab_switch_input", placeholder="tab_switcher",
-                           label_visibility="collapsed", value=st.session_state.mobile_tab)
-if tab_switch and tab_switch != st.session_state.mobile_tab:
-    st.session_state.mobile_tab = tab_switch
-    st.rerun()
 
 # Search Bar (Match Reference)
 search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
