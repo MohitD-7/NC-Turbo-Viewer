@@ -24,7 +24,11 @@ st.markdown("""
     header {visibility: hidden;}
     footer {visibility: hidden;}
     [data-testid="stToolbar"] {visibility: hidden !important;}
-    [data-testid="stSidebarCollapseButton"] {display: none !important;}
+
+    /* Hide sidebar collapse button on desktop only */
+    @media (min-width: 768px) {
+        [data-testid="stSidebarCollapseButton"] {display: none !important;}
+    }
     
     .stApp {
         background-color: #f8fafc;
@@ -67,106 +71,115 @@ st.markdown("""
     @media (max-width: 479px) {
         /* Maximize screen space */
         .block-container {
-            padding-left: 0.75rem !important;
-            padding-right: 0.75rem !important;
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
             padding-top: 0.5rem !important;
         }
 
-        /* Single column layout */
+        /* Two column layout on phones */
         .card-grid {
-            grid-template-columns: 1fr !important;
-            gap: 16px;
-            padding-top: 1rem;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 8px;
+            padding-top: 0.75rem;
         }
 
-        /* Full-width cards */
+        /* Compact cards for 2-column layout */
         .product-card {
             max-width: 100%;
-            padding: 0.625rem;
+            padding: 0.4rem;
         }
 
-        /* Larger touch targets (iOS/Android guidelines) */
+        /* Appropriately sized touch targets */
         .shortlist-btn {
-            width: 48px !important;
-            height: 48px !important;
-            font-size: 1.5rem;
-            top: 8px;
-            right: 8px;
+            width: 40px !important;
+            height: 40px !important;
+            font-size: 1.2rem;
+            top: 4px;
+            right: 4px;
         }
 
         .swap-btn {
-            width: 44px !important;
-            height: 44px !important;
-            font-size: 1.4rem;
-            bottom: 10px;
-            right: 10px;
+            width: 36px !important;
+            height: 36px !important;
+            font-size: 1.1rem;
+            bottom: 4px;
+            right: 4px;
         }
 
-        /* Readable typography */
+        /* Compact typography for 2-column */
         .hero-title {
-            font-size: 1.75rem;
-            margin-bottom: 0.5rem;
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
         }
 
         .detail-row {
-            font-size: 0.85rem;
-            padding: 0.25rem 0;
+            font-size: 0.7rem;
+            padding: 0.15rem 0;
+            line-height: 1.2;
         }
 
         .part-number {
-            font-size: 1rem;
+            font-size: 0.85rem;
         }
 
         .badge {
-            font-size: 0.65rem;
-            padding: 0.15rem 0.5rem;
+            font-size: 0.6rem;
+            padding: 0.1rem 0.35rem;
         }
 
-        /* Square image ratio for mobile */
+        /* Taller image ratio for mobile 2-column */
         .image-container {
-            aspect-ratio: 1 / 1;
-            margin: 0.3rem 0;
+            aspect-ratio: 0.9 / 1;
+            margin: 0.25rem 0;
         }
 
-        /* Subtle hover on mobile */
+        /* Disable transform on mobile */
         .product-card:hover {
-            transform: translateY(-4px);
+            transform: none;
         }
     }
 
     /* Mobile Medium (480px-767px) - Landscape Phones */
     @media (min-width: 480px) and (max-width: 767px) {
         .block-container {
-            padding-left: 1rem !important;
-            padding-right: 1rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
             padding-top: 0.75rem !important;
         }
 
-        /* 1-2 columns auto-fit */
+        /* 2 columns with better spacing */
         .card-grid {
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
-            gap: 18px;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 12px;
         }
 
         /* Touch-friendly buttons */
         .shortlist-btn {
-            width: 44px !important;
-            height: 44px !important;
-            font-size: 1.4rem;
-        }
-
-        .swap-btn {
-            width: 40px !important;
-            height: 40px !important;
+            width: 42px !important;
+            height: 42px !important;
             font-size: 1.3rem;
         }
 
+        .swap-btn {
+            width: 38px !important;
+            height: 38px !important;
+            font-size: 1.2rem;
+        }
+
         .hero-title {
-            font-size: 2.25rem;
+            font-size: 1.5rem;
+        }
+
+        .product-card {
+            padding: 0.5rem;
+        }
+
+        .detail-row {
+            font-size: 0.75rem;
         }
 
         .product-card:hover {
-            transform: translateY(-6px);
+            transform: translateY(-4px);
         }
     }
 
@@ -496,30 +509,48 @@ st.markdown("""
 
     /* Mobile-Specific UI Improvements */
     @media (max-width: 767px) {
-        /* Full-width sidebar when open */
+        /* Compact sidebar on mobile - 80% width */
         [data-testid="stSidebar"] {
-            width: 100% !important;
-            max-width: 100% !important;
+            width: 80% !important;
+            max-width: 320px !important;
         }
 
-        /* Larger sidebar touch targets */
+        /* Compact sidebar elements */
         [data-testid="stSidebar"] button {
-            min-height: 44px !important;
+            min-height: 40px !important;
+            font-size: 0.85rem;
+            padding: 0.3rem 0.5rem !important;
         }
 
-        /* Mobile-friendly dropdowns */
-        div[data-baseweb="select"] {
-            font-size: 0.95rem;
+        /* Compact multiselect dropdowns */
+        [data-testid="stSidebar"] div[data-baseweb="select"] {
+            font-size: 0.85rem;
         }
 
-        /* Larger search input */
+        /* Compact sidebar labels */
+        [data-testid="stSidebar"] label {
+            font-size: 0.85rem !important;
+        }
+
+        /* Compact sidebar dividers */
+        [data-testid="stSidebar"] hr {
+            margin: 0.5rem 0 !important;
+        }
+
+        /* Compact sidebar markdown */
+        [data-testid="stSidebar"] h3 {
+            font-size: 0.95rem !important;
+            margin: 0.5rem 0 !important;
+        }
+
+        /* Larger search input in main area */
         div[data-baseweb="input"] {
-            font-size: 1rem !important;
-            min-height: 48px;
+            font-size: 0.95rem !important;
+            min-height: 44px;
         }
 
         div[data-baseweb="input"] input {
-            font-size: 1rem !important;
+            font-size: 0.95rem !important;
         }
 
         /* Thinner scrollbar */
