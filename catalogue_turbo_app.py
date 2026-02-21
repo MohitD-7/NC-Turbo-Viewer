@@ -511,9 +511,12 @@ st.markdown("""
        MOBILE APP EXPERIENCE (Bottom Navigation)
        ============================================ */
     @media (max-width: 767px) {
-        /* HIDE sidebar completely on mobile */
+        /* Move sidebar off-screen on mobile (but keep in DOM for cloning) */
         [data-testid="stSidebar"] {
-            display: none !important;
+            position: fixed !important;
+            left: -9999px !important;
+            top: -9999px !important;
+            visibility: hidden !important;
         }
 
         /* Add padding for bottom navigation */
@@ -572,11 +575,11 @@ st.markdown("""
             color: #3b82f6;
         }
 
-        /* Floating Filter Button */
+        /* Floating Filter Button - Bottom Left */
         .mobile-filter-btn {
             position: fixed;
-            top: 20px;
-            right: 16px;
+            bottom: 75px;
+            left: 16px;
             width: 50px;
             height: 50px;
             border-radius: 25px;
@@ -677,6 +680,16 @@ st.markdown("""
         /* Thinner scrollbar */
         ::-webkit-scrollbar {
             width: 4px;
+        }
+    }
+
+    /* Hide mobile UI elements on desktop */
+    @media (min-width: 768px) {
+        .mobile-bottom-nav,
+        .mobile-filter-btn,
+        .filter-modal,
+        .filter-backdrop {
+            display: none !important;
         }
     }
 </style>
@@ -1079,16 +1092,21 @@ mobile_nav_html = f"""
 
             if (!isOpen) {{
                 // Clone sidebar content into modal when opening
-                const sidebar = document.querySelector('[data-testid="stSidebar"]');
-                const modalContent = document.getElementById('mobile-filter-container');
+                setTimeout(() => {{
+                    const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                    const modalContent = document.getElementById('mobile-filter-container');
 
-                if (sidebar && modalContent && modalContent.children.length === 0) {{
-                    // Clone sidebar inner content
-                    const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
-                    if (sidebarContent) {{
-                        modalContent.innerHTML = sidebarContent.innerHTML;
+                    if (sidebar && modalContent) {{
+                        // Always refresh content to ensure it's up-to-date
+                        const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
+                        if (sidebarContent) {{
+                            modalContent.innerHTML = sidebarContent.innerHTML;
+                        }} else {{
+                            // Fallback: clone entire sidebar
+                            modalContent.innerHTML = sidebar.innerHTML;
+                        }}
                     }}
-                }}
+                }}, 100);
             }}
 
             modal.classList.toggle('open');
