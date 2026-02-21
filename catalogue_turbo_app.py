@@ -620,12 +620,13 @@ st.markdown("""
             display: none !important;
         }
 
-        /* Reset sidebar to default desktop behavior */
+        /* Reset sidebar to default desktop behavior with FIXED WIDTH */
         [data-testid="stSidebar"] {
             position: relative !important;
             transform: none !important;
-            width: auto !important;
-            max-width: none !important;
+            width: 21rem !important;
+            min-width: 21rem !important;
+            max-width: 21rem !important;
             z-index: auto !important;
             top: auto !important;
             bottom: auto !important;
