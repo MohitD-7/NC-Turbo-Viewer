@@ -612,11 +612,29 @@ st.markdown("""
         }
     }
 
-    /* Hide mobile UI elements on desktop */
+    /* Desktop: Ensure sidebar is visible and fixed on left */
     @media (min-width: 768px) {
         .mobile-filter-btn,
         .filter-modal,
         .filter-backdrop {
+            display: none !important;
+        }
+
+        /* Reset sidebar to default desktop behavior */
+        [data-testid="stSidebar"] {
+            position: relative !important;
+            transform: none !important;
+            width: auto !important;
+            max-width: none !important;
+            z-index: auto !important;
+            top: auto !important;
+            bottom: auto !important;
+            left: auto !important;
+            border-radius: 0 !important;
+        }
+
+        /* Hide swipe handle on desktop */
+        [data-testid="stSidebar"]::before {
             display: none !important;
         }
     }
