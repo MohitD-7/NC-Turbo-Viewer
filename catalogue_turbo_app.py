@@ -974,7 +974,7 @@ st.markdown("""
 
 # Mobile Filter Button (only visible on mobile)
 mobile_nav_html = f"""
-<button class="mobile-filter-btn" id="mobile-filter-button">
+<button class="mobile-filter-btn" id="mobile-filter-button" onclick="toggleFilters()">
     ☰
 </button>
 
@@ -991,47 +991,37 @@ mobile_nav_html = f"""
 </div>
 
 <script>
-(function() {{
-    function toggleFilters() {{
-        const modal = document.querySelector('.filter-modal');
-        const backdrop = document.querySelector('.filter-backdrop');
+// Define toggleFilters globally first
+window.toggleFilters = function() {{
+    const modal = document.querySelector('.filter-modal');
+    const backdrop = document.querySelector('.filter-backdrop');
 
-        if (modal && backdrop) {{
-            const isOpen = modal.classList.contains('open');
+    if (modal && backdrop) {{
+        const isOpen = modal.classList.contains('open');
 
-            if (!isOpen) {{
-                // Clone sidebar content into modal when opening
-                setTimeout(() => {{
-                    const sidebar = document.querySelector('[data-testid="stSidebar"]');
-                    const modalContent = document.getElementById('mobile-filter-container');
+        if (!isOpen) {{
+            // Clone sidebar content into modal when opening
+            setTimeout(() => {{
+                const sidebar = document.querySelector('[data-testid="stSidebar"]');
+                const modalContent = document.getElementById('mobile-filter-container');
 
-                    if (sidebar && modalContent) {{
-                        // Always refresh content to ensure it's up-to-date
-                        const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
-                        if (sidebarContent) {{
-                            modalContent.innerHTML = sidebarContent.innerHTML;
-                        }} else {{
-                            // Fallback: clone entire sidebar
-                            modalContent.innerHTML = sidebar.innerHTML;
-                        }}
+                if (sidebar && modalContent) {{
+                    // Always refresh content to ensure it's up-to-date
+                    const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
+                    if (sidebarContent) {{
+                        modalContent.innerHTML = sidebarContent.innerHTML;
+                    }} else {{
+                        // Fallback: clone entire sidebar
+                        modalContent.innerHTML = sidebar.innerHTML;
                     }}
-                }}, 100);
-            }}
-
-            modal.classList.toggle('open');
-            backdrop.classList.toggle('open');
+                }}
+            }}, 100);
         }}
-    }}
 
-    // Attach click handler to filter button
-    const filterBtn = document.getElementById('mobile-filter-button');
-    if (filterBtn) {{
-        filterBtn.addEventListener('click', toggleFilters);
+        modal.classList.toggle('open');
+        backdrop.classList.toggle('open');
     }}
-
-    // Make toggleFilters available globally for backdrop/close button
-    window.toggleFilters = toggleFilters;
-}})();
+}};
 </script>
 """
 st.markdown(mobile_nav_html, unsafe_allow_html=True)
