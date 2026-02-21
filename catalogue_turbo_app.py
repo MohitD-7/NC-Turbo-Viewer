@@ -972,7 +972,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Mobile Filter Button and Modal (only visible on mobile)
+# Mobile Filter Button and Modal - HTML (visible in page)
 mobile_filter_html = """
 <button class="mobile-filter-btn" id="mobile-filter-button">
     ☰
@@ -989,7 +989,11 @@ mobile_filter_html = """
         <!-- Sidebar content will be cloned here -->
     </div>
 </div>
+"""
+st.markdown(mobile_filter_html, unsafe_allow_html=True)
 
+# JavaScript for filter toggle (in separate component with height=0)
+mobile_filter_js = """
 <script>
 (function() {
     const parentDoc = window.parent.document;
@@ -997,8 +1001,6 @@ mobile_filter_html = """
     function toggleFilters() {
         const modal = parentDoc.querySelector('#filter-modal');
         const backdrop = parentDoc.querySelector('#filter-backdrop');
-
-        console.log('toggleFilters called', modal, backdrop);
 
         if (modal && backdrop) {
             const isOpen = modal.classList.contains('open');
@@ -1030,7 +1032,6 @@ mobile_filter_html = """
 
     if (filterBtn) {
         filterBtn.addEventListener('click', toggleFilters);
-        console.log('Filter button listener attached');
     }
 
     if (closeBtn) {
@@ -1043,7 +1044,7 @@ mobile_filter_html = """
 })();
 </script>
 """
-components.html(mobile_filter_html, height=0)
+components.html(mobile_filter_js, height=0)
 
 # Search Bar (Match Reference)
 search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
