@@ -991,11 +991,19 @@ mobile_filter_js = """
     }
 
     if (closeBtn) {
-        closeBtn.addEventListener('click', toggleFilters);
+        closeBtn.addEventListener('click', function(e) {
+            e.stopPropagation(); // Prevent backdrop click from also firing
+            toggleFilters();
+        });
     }
 
     if (backdrop) {
-        backdrop.addEventListener('click', toggleFilters);
+        backdrop.addEventListener('click', function(e) {
+            // Only close if clicking backdrop itself, not the button
+            if (e.target === backdrop) {
+                toggleFilters();
+            }
+        });
     }
 })();
 </script>
