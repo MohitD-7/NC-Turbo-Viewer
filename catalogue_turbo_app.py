@@ -972,18 +972,18 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Mobile Filter Button (only visible on mobile)
-mobile_nav_html = f"""
-<button class="mobile-filter-btn" id="mobile-filter-button" onclick="toggleFilters()">
+# Mobile Filter Button and Modal (only visible on mobile)
+mobile_filter_html = """
+<button class="mobile-filter-btn" id="mobile-filter-button">
     ☰
 </button>
 
-<div class="filter-backdrop" onclick="toggleFilters()"></div>
+<div class="filter-backdrop" id="filter-backdrop"></div>
 
-<div class="filter-modal">
+<div class="filter-modal" id="filter-modal">
     <div class="filter-modal-header">
         <div class="filter-modal-title">Filters</div>
-        <button class="filter-modal-close" onclick="toggleFilters()">×</button>
+        <button class="filter-modal-close" id="close-filters">×</button>
     </div>
     <div class="filter-modal-content" id="mobile-filter-container">
         <!-- Sidebar content will be cloned here -->
@@ -991,40 +991,59 @@ mobile_nav_html = f"""
 </div>
 
 <script>
-// Define toggleFilters globally first
-window.toggleFilters = function() {{
-    const modal = document.querySelector('.filter-modal');
-    const backdrop = document.querySelector('.filter-backdrop');
+(function() {
+    const parentDoc = window.parent.document;
 
-    if (modal && backdrop) {{
-        const isOpen = modal.classList.contains('open');
+    function toggleFilters() {
+        const modal = parentDoc.querySelector('#filter-modal');
+        const backdrop = parentDoc.querySelector('#filter-backdrop');
 
-        if (!isOpen) {{
-            // Clone sidebar content into modal when opening
-            setTimeout(() => {{
-                const sidebar = document.querySelector('[data-testid="stSidebar"]');
-                const modalContent = document.getElementById('mobile-filter-container');
+        console.log('toggleFilters called', modal, backdrop);
 
-                if (sidebar && modalContent) {{
-                    // Always refresh content to ensure it's up-to-date
+        if (modal && backdrop) {
+            const isOpen = modal.classList.contains('open');
+
+            if (!isOpen) {
+                // Clone sidebar content when opening
+                const sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
+                const modalContent = parentDoc.querySelector('#mobile-filter-container');
+
+                if (sidebar && modalContent) {
                     const sidebarContent = sidebar.querySelector('[data-testid="stSidebarContent"]');
-                    if (sidebarContent) {{
+                    if (sidebarContent) {
                         modalContent.innerHTML = sidebarContent.innerHTML;
-                    }} else {{
-                        // Fallback: clone entire sidebar
+                    } else {
                         modalContent.innerHTML = sidebar.innerHTML;
-                    }}
-                }}
-            }}, 100);
-        }}
+                    }
+                }
+            }
 
-        modal.classList.toggle('open');
-        backdrop.classList.toggle('open');
-    }}
-}};
+            modal.classList.toggle('open');
+            backdrop.classList.toggle('open');
+        }
+    }
+
+    // Attach event listeners
+    const filterBtn = parentDoc.querySelector('#mobile-filter-button');
+    const closeBtn = parentDoc.querySelector('#close-filters');
+    const backdrop = parentDoc.querySelector('#filter-backdrop');
+
+    if (filterBtn) {
+        filterBtn.addEventListener('click', toggleFilters);
+        console.log('Filter button listener attached');
+    }
+
+    if (closeBtn) {
+        closeBtn.addEventListener('click', toggleFilters);
+    }
+
+    if (backdrop) {
+        backdrop.addEventListener('click', toggleFilters);
+    }
+})();
 </script>
 """
-st.markdown(mobile_nav_html, unsafe_allow_html=True)
+components.html(mobile_filter_html, height=0)
 
 # Search Bar (Match Reference)
 search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
