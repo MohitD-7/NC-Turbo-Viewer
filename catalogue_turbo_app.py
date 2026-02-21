@@ -10,7 +10,7 @@ st.set_page_config(
     page_title="NorthCape Turbo Catalogue",
     page_icon="🛋️",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="auto"  # Auto-collapses on mobile (<768px)
 )
 
 # Force Refresh Commit: Triggering Deployment Rebuild
@@ -57,6 +57,142 @@ st.markdown("""
     }
     @media (min-width: 1600px) {
         .card-grid { grid-template-columns: repeat(5, 1fr); }
+    }
+
+    /* ============================================
+       MOBILE RESPONSIVE BREAKPOINTS
+       ============================================ */
+
+    /* Mobile Small (<480px) - Portrait Phones */
+    @media (max-width: 479px) {
+        /* Maximize screen space */
+        .block-container {
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            padding-top: 0.5rem !important;
+        }
+
+        /* Single column layout */
+        .card-grid {
+            grid-template-columns: 1fr !important;
+            gap: 16px;
+            padding-top: 1rem;
+        }
+
+        /* Full-width cards */
+        .product-card {
+            max-width: 100%;
+            padding: 0.625rem;
+        }
+
+        /* Larger touch targets (iOS/Android guidelines) */
+        .shortlist-btn {
+            width: 48px !important;
+            height: 48px !important;
+            font-size: 1.5rem;
+            top: 8px;
+            right: 8px;
+        }
+
+        .swap-btn {
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 1.4rem;
+            bottom: 10px;
+            right: 10px;
+        }
+
+        /* Readable typography */
+        .hero-title {
+            font-size: 1.75rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .detail-row {
+            font-size: 0.85rem;
+            padding: 0.25rem 0;
+        }
+
+        .part-number {
+            font-size: 1rem;
+        }
+
+        .badge {
+            font-size: 0.65rem;
+            padding: 0.15rem 0.5rem;
+        }
+
+        /* Square image ratio for mobile */
+        .image-container {
+            aspect-ratio: 1 / 1;
+            margin: 0.3rem 0;
+        }
+
+        /* Subtle hover on mobile */
+        .product-card:hover {
+            transform: translateY(-4px);
+        }
+    }
+
+    /* Mobile Medium (480px-767px) - Landscape Phones */
+    @media (min-width: 480px) and (max-width: 767px) {
+        .block-container {
+            padding-left: 1rem !important;
+            padding-right: 1rem !important;
+            padding-top: 0.75rem !important;
+        }
+
+        /* 1-2 columns auto-fit */
+        .card-grid {
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)) !important;
+            gap: 18px;
+        }
+
+        /* Touch-friendly buttons */
+        .shortlist-btn {
+            width: 44px !important;
+            height: 44px !important;
+            font-size: 1.4rem;
+        }
+
+        .swap-btn {
+            width: 40px !important;
+            height: 40px !important;
+            font-size: 1.3rem;
+        }
+
+        .hero-title {
+            font-size: 2.25rem;
+        }
+
+        .product-card:hover {
+            transform: translateY(-6px);
+        }
+    }
+
+    /* Tablet (768px-899px) - Bridge to Desktop */
+    @media (min-width: 768px) and (max-width: 899px) {
+        .block-container {
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+        }
+
+        /* 2-3 columns auto-fit */
+        .card-grid {
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)) !important;
+            gap: 20px;
+        }
+
+        /* Slightly larger than desktop touch targets */
+        .shortlist-btn {
+            width: 40px !important;
+            height: 40px !important;
+        }
+
+        .swap-btn {
+            width: 36px !important;
+            height: 36px !important;
+        }
     }
 
     /* Product Card */
@@ -320,6 +456,76 @@ st.markdown("""
         z-index: -9999;
         opacity: 0;
         pointer-events: none;
+    }
+
+    /* ============================================
+       TOUCH DEVICE OPTIMIZATIONS
+       ============================================ */
+
+    /* Touch Device Enhancements */
+    @media (hover: none) and (pointer: coarse) {
+        /* Visual touch feedback */
+        .shortlist-btn:active {
+            transform: scale(0.85) !important;
+            background: #fef08a !important;
+        }
+
+        .swap-btn:active {
+            transform: scale(0.85) !important;
+            background: #dbeafe !important;
+        }
+
+        /* Disable hover effects on touch devices */
+        .product-card:hover .image-container img {
+            transform: scale(1);
+        }
+
+        .product-card:hover {
+            transform: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+            border-color: #e2e8f0;
+        }
+
+        /* Prevent double-tap zoom on buttons */
+        .shortlist-btn, .swap-btn {
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    }
+
+    /* Mobile-Specific UI Improvements */
+    @media (max-width: 767px) {
+        /* Full-width sidebar when open */
+        [data-testid="stSidebar"] {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        /* Larger sidebar touch targets */
+        [data-testid="stSidebar"] button {
+            min-height: 44px !important;
+        }
+
+        /* Mobile-friendly dropdowns */
+        div[data-baseweb="select"] {
+            font-size: 0.95rem;
+        }
+
+        /* Larger search input */
+        div[data-baseweb="input"] {
+            font-size: 1rem !important;
+            min-height: 48px;
+        }
+
+        div[data-baseweb="input"] input {
+            font-size: 1rem !important;
+        }
+
+        /* Thinner scrollbar */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -895,6 +1101,9 @@ js_swap_html = """
 
     parentDoc.addEventListener('click', handler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
+    // Add touch events for instant mobile response (no 300ms delay)
+    parentDoc.addEventListener('touchstart', handler, true);
+    parentDoc.addEventListener('touchstart', shortlistHandler, true);
     console.log("NC Checklist: V7 Listeners Active");
 })();
 </script>
