@@ -365,25 +365,293 @@ def get_base64_img(thumb_path):
         pass
     return None
 
-# --- Shortlist Sync Bridge (V7 - Ultra Robust) ---
-sync_key = f"sync_v7_{st.session_state.sync_counter}"
-# Using a unique placeholder is the most reliable way for JS to find the input
-sync_val = st.text_input("sync_bridge", placeholder="sync_bridge_v7", key=sync_key, label_visibility="collapsed")
+# --- Main UI Rendering (Optimized with st.fragment) ---
+@st.fragment
+def render_main_ui(filtered_df):
+    # 1. Shortlist Sync Bridge (V7 - Local Re-run)
+    sync_key = f"sync_v7_{st.session_state.sync_counter}"
+    # Invisible input for JS communication
+    sync_val = st.text_input("sync_bridge", placeholder="sync_bridge_v7", key=sync_key, label_visibility="collapsed")
+    
+    if sync_val and "|" in sync_val:
+        try:
+            part = sync_val.split("|")[0]
+            if part in st.session_state.shortlist:
+                st.session_state.shortlist.remove(part)
+                st.toast(f"Removed: {part}", icon="🗑️")
+            else:
+                st.session_state.shortlist.add(part)
+                st.toast(f"Added: {part}", icon="⭐")
+            st.session_state.sync_counter += 1
+            st.rerun(scope="fragment")
+        except Exception:
+            pass
 
-if sync_val and "|" in sync_val:
-    try:
-        part = sync_val.split("|")[0]
-        if part in st.session_state.shortlist:
-            st.session_state.shortlist.remove(part)
-            st.toast(f"Removed from shortlist: {part}", icon="🗑️")
-        else:
-            st.session_state.shortlist.add(part)
-            st.toast(f"Added to shortlist: {part}", icon="⭐")
+    # 2. Sidebar Shortlist & Export Section (In Fragment to update count instantly)
+    with st.sidebar:
+        st.divider()
+        st.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
         
-        # Increment counter to ROTATE KEY for next time (handled by Streamlit's natural rerun)
-        st.session_state.sync_counter += 1
-    except Exception:
-        pass
+        # View Shortlist Only Toggle
+        view_mode = st.toggle("View Shortlist Only", value=st.session_state.view_shortlist)
+        if view_mode != st.session_state.view_shortlist:
+            st.session_state.view_shortlist = view_mode
+            st.rerun() # Full rerun needed to update global filtering
+
+        if st.session_state.view_shortlist:
+            filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
+
+        # Shortlist All Visible Button
+        if not filtered_df.empty:
+            if st.button("Shortlist All Visible", use_container_width=True):
+                visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
+                st.session_state.shortlist.update(visible_parts)
+                st.rerun(scope="fragment")
+
+        # Clear Shortlist Button
+        if st.button("Clear All", use_container_width=True):
+            st.session_state.shortlist = set()
+            st.rerun(scope="fragment")
+
+        # --- Export Section ---
+        if len(st.session_state.shortlist) > 0:
+            st.divider()
+            st.markdown("### 📥 Export Shortlist")
+            export_format = st.selectbox("Choose Format", ["Excel (.xlsx)", "PDF Gallery"])
+            
+            # Use all data for export, not just filtered subset
+            export_raw_df = df[df["Part Number"].isin(st.session_state.shortlist)]
+            
+            if export_format == "Excel (.xlsx)":
+                try:
+                    import io
+                    import glob
+                    import openpyxl.utils
+                    from openpyxl.styles import Font
+                    output = io.BytesIO()
+                    base_dir = os.path.dirname(os.path.abspath(__file__))
+                    excel_files = glob.glob(os.path.join(base_dir, "*.xlsx"))
+                    
+                    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                        unique_types = export_raw_df["Collection Type"].unique()
+                        for coll_type in unique_types:
+                            parts_subset = export_raw_df[export_raw_df["Collection Type"] == coll_type]
+                            parts_list = parts_subset["Part Number"].tolist()
+                            
+                            source_df = None
+                            for f in excel_files:
+                                try:
+                                    xl = pd.ExcelFile(f)
+                                    if coll_type in xl.sheet_names:
+                                        source_df = pd.read_excel(f, sheet_name=coll_type)
+                                        source_df = source_df[source_df["Part Number"].isin(parts_list)]
+                                        break
+                                except Exception: continue
+                            
+                            final_sheet_df = source_df.copy() if source_df is not None else parts_subset.copy()
+                            drop_cols = ["Thumbnail", "_thumbnail_path", "Local_Thumbnail", "Image_List", "Part Number_Link", "Collection Type"]
+                            final_sheet_df = final_sheet_df.drop(columns=[c for c in drop_cols if c in final_sheet_df.columns])
+                            
+                            if "Color_Link" not in final_sheet_df.columns:
+                                link_map = df[["Part Number", "Color_Link"]].drop_duplicates()
+                                final_sheet_df = final_sheet_df.merge(link_map, on="Part Number", how="left")
+                            
+                            # Ordering Logic
+                            cols = final_sheet_df.columns.tolist()
+                            if "Part Number" in cols: cols.insert(0, cols.pop(cols.index("Part Number")))
+                            if "Product" in cols:
+                                p_idx = cols.index("Product")
+                                if "Arm/Table-Top" in cols:
+                                    cols.insert(p_idx, cols.pop(cols.index("Arm/Table-Top")))
+                                    p_idx = cols.index("Product")
+                                if "Panel" in cols: cols.insert(p_idx + 1, cols.pop(cols.index("Panel")))
+                            
+                            final_sheet_df = final_sheet_df[cols]
+                            sheet_name = "".join([c for c in str(coll_type) if c not in r'[]:*?/\ '])[:31]
+                            final_sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
+                            
+                            worksheet = writer.sheets[sheet_name]
+                            for col in worksheet.columns:
+                                max_length = max([len(str(cell.value or "")) for cell in col])
+                                worksheet.column_dimensions[col[0].column_letter].width = min(max_length + 2, 60)
+
+                            color_col = "Cushion Color" if coll_type == "Cushions" else "Color"
+                            h_font = Font(size=11, underline='single', color='0563C1')
+                            
+                            if color_col in final_sheet_df.columns and "Color_Link" in final_sheet_df.columns:
+                                c_idx = final_sheet_df.columns.get_loc(color_col) + 1
+                                l_idx = final_sheet_df.columns.get_loc("Color_Link") + 1
+                                for row_num in range(2, len(final_sheet_df) + 2):
+                                    link_val = worksheet.cell(row=row_num, column=l_idx).value
+                                    if link_val and str(link_val).startswith("http"):
+                                        cell = worksheet.cell(row=row_num, column=c_idx)
+                                        cell.hyperlink = link_val
+                                        cell.font = h_font
+                                worksheet.delete_cols(l_idx)
+                                
+                            current_headers = [cell.value for cell in worksheet[1]]
+                            if "Dropbox Folder Path" in current_headers:
+                                p_idx_ws = current_headers.index("Dropbox Folder Path") + 1
+                                worksheet.column_dimensions[openpyxl.utils.get_column_letter(p_idx_ws)].visible = False
+                    
+                    st.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
+                except Exception as e:
+                    st.error(f"Excel Export failed: {str(e)}")
+
+            elif export_format == "PDF Gallery":
+                try:
+                    from fpdf import FPDF
+                    class PDF(FPDF):
+                        def header(self):
+                            self.set_font('helvetica', 'B', 22); self.set_text_color(30, 64, 175); self.cell(0, 15, 'NORTHCAPE CATALOGUE', 0, 1, 'C')
+                            self.set_draw_color(226, 232, 240); self.line(10, 25, 200, 25); self.ln(10)
+                        def footer(self): self.set_y(-15); self.set_font('helvetica', 'I', 8); self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
+                    
+                    pdf = PDF(); pdf.set_auto_page_break(auto=False, margin=0); pdf.add_page()
+                    margin, gutter, col_width, row_height = 10, 5, 60, 85
+                    current_col, current_row = 0, 0
+                    
+                    for i, (_, item) in enumerate(export_raw_df.iterrows()):
+                        if i > 0 and i % 9 == 0:
+                            pdf.add_page(); current_col, current_row = 0, 0
+                        cell_x, cell_y = margin + (current_col * (col_width + gutter)), 30 + (current_row * row_height)
+                        thumb_path = item.get('Local_Thumbnail')
+                        img_y_offset = cell_y
+                        if thumb_path:
+                            abs_thumb = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "thumbnails", os.path.basename(thumb_path))
+                            if os.path.exists(abs_thumb):
+                                img_w = 58; pdf.image(abs_thumb, x=cell_x + (col_width - img_w) / 2, y=cell_y, w=img_w)
+                                img_y_offset += 48
+                        
+                        pdf.set_xy(cell_x, img_y_offset + 2); pdf.set_font('helvetica', 'B', 8); pdf.set_text_color(15, 23, 42)
+                        pdf.multi_cell(col_width, 4, str(item['Part Number']), ln=0, align='C')
+                        
+                        pdf.set_font('helvetica', '', 7); details_y = pdf.get_y() + 1
+                        st_type, prod_l = str(item.get('Type', '')).strip(), str(item.get('Product', '')).lower()
+                        fields = [("Type", item.get('Type')), ("Collection", item.get('Collection'))]
+                        if st_type != "Cushion": 
+                            fields.insert(1, ("Product", item.get('Product')))
+                            if item.get('Arm/Table-Top'): fields.append(("Arm", item.get('Arm/Table-Top')))
+                            if item.get('Panel'): fields.append(("Panel", item.get('Panel')))
+                        if 'table' not in prod_l: fields.append(("Color", item.get('Color')))
+                        
+                        pdf.set_xy(cell_x, details_y); details_text = "".join([f"{l}: {v}\n" for l, v in fields if pd.notna(v) and str(v).strip()])
+                        pdf.set_x(cell_x + (col_width-50)/2); pdf.set_text_color(100, 116, 139)
+                        pdf.multi_cell(50, 3.5, details_text, ln=0, align='L')
+                        current_col = (current_col + 1)
+                        if current_col >= 3: current_col, current_row = 0, current_row + 1
+                    
+                    pdf_data = bytes(pdf.output())
+                    st.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf", use_container_width=True)
+                    
+                    if st.button("Show Preview", use_container_width=True):
+                        base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
+                        st.markdown(f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>', unsafe_allow_html=True)
+                except Exception as e: st.error(f"PDF Error: {str(e)}")
+
+    # 3. Main Content Rendering
+    st.markdown('<div class="hero-container"><div class="hero-title">NorthCape Image Library</div></div>', unsafe_allow_html=True)
+    
+    # Search Bar (Inside Fragment for speed)
+    search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
+    if search_query:
+        q = search_query.lower()
+        searchable_cols = [c for c in filtered_df.columns if not any(x in c for x in ["Image", "Thumbnail", "Link", "List"])]
+        mask = filtered_df[searchable_cols].apply(lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1)
+        filtered_df = filtered_df[mask]
+
+    st.caption(f"Showing {len(filtered_df)} records")
+    
+    # Pagination
+    items_per_page = 25
+    total_pages = max(1, (len(filtered_df) - 1) // items_per_page + 1)
+    page_col1, page_col2 = st.columns([1, 4])
+    with page_col1:
+        page = st.number_input("Page", min_value=1, max_value=total_pages, value=1)
+    
+    start_idx = (page - 1) * items_per_page
+    paged_data = filtered_df.iloc[start_idx:start_idx + items_per_page]
+
+    # Grid Rendering
+    grid_html = '<div class="card-grid">'
+    TECHNICAL_FIELDS = ["Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"]
+
+    for i, (_, item) in enumerate(paged_data.iterrows()):
+        image_list = item.get("Image_List", []) or ([item["Local_Thumbnail"]] if item.get("Local_Thumbnail") else [])
+        b64_images = [get_base64_img(t) for t in image_list[:3] if get_base64_img(t)]
+        if not b64_images and item.get("Local_Thumbnail"):
+            pb64 = get_base64_img(item.get("Local_Thumbnail"))
+            if pb64: b64_images = [pb64]
+            
+        img_src = b64_images[0] if b64_images else ""
+        is_shortlisted = item["Part Number"] in st.session_state.shortlist
+        sc, si = ("active", "⭐") if is_shortlisted else ("", "☆")
+        b64_data_attr = base64.b64encode(json.dumps(b64_images).encode()).decode()
+
+        display_fields = []
+        is_table = 'table' in str(item.get('Product', '')).lower()
+        for k, v in item.items():
+            if k not in TECHNICAL_FIELDS and not any(x in k for x in ["Image"]):
+                if k == "Color" and is_table: continue
+                if pd.notna(v) and str(v).strip() and str(v).lower() != 'nan':
+                    display_fields.append((k, str(v)))
+
+        def r_html(l, v):
+            val = v
+            if l == "Color" and pd.notna(item.get('Color_Link')):
+                val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{v}</a>'
+            return f'<div class="detail-row"><span class="detail-label">{l}</span><span class="detail-value">{val}</span></div>'
+
+        stats_html = "".join([f'<div class="detail-row"><span class="detail-label">{k} Images</span><span class="detail-value">{int(item.get(c,0))}</span></div>' for k, c in [("NC", "NC Image Count"), ("OS", "OS Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")] if item.get(c,0)>0])
+        swap_html = f'<div class="swap-btn" data-swap-target="img-{i}" title="Next Image" style="cursor: pointer; pointer-events: auto;">🔄</div>' if len(b64_images) > 1 else ""
+        detail_rows = "".join([r_html(lbl, v) for lbl, v in display_fields])
+
+        grid_html += (
+            f'<div class="product-card">'
+                f'<div class="shortlist-btn {sc}" data-part="{item["Part Number"]}" title="Add to Shortlist">{si}</div>'
+                f'<div class="card-header"><div class="badge">{item["Collection Type"]}</div><div class="part-number">{item["Part Number"]}</div><div class="collection-text">{item["Collection"]}</div></div>'
+                f'<div class="image-container"><img id="img-{i}" src="{img_src}" alt="Prod" data-urls-b64="{b64_data_attr}" data-idx="0">{swap_html}</div>'
+                f'<div class="card-footer">{detail_rows}<div style="margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 8px;">{stats_html}</div></div>'
+            f'</div>'
+        )
+
+    st.markdown(grid_html + '</div>', unsafe_allow_html=True)
+
+    # JS Injection (Bridge and Swapper)
+    st.markdown("""
+<script>
+(function() {
+    const p = window.parent.document;
+    const h = (e) => {
+        const b = e.target.closest('.swap-btn'); if (!b) return;
+        e.preventDefault(); e.stopPropagation();
+        const img = p.getElementById(b.getAttribute('data-swap-target')); if (!img) return;
+        try {
+            const urls = JSON.parse(atob(img.getAttribute('data-urls-b64')));
+            let idx = (parseInt(img.getAttribute('data-idx')) || 0 + 1) % urls.length;
+            img.src = urls[idx]; img.setAttribute('data-idx', idx);
+        } catch(err) {}
+    };
+    const sh = (e) => {
+        const b = e.target.closest('.shortlist-btn'); if (!b) return;
+        const part = b.getAttribute('data-part');
+        let inp = p.querySelector('input[placeholder="sync_bridge_v7"]');
+        if (inp) {
+            b.style.backgroundColor = '#fef08a'; b.style.transform = 'scale(0.8)';
+            const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+            set.call(inp, part + "|" + Date.now());
+            inp.dispatchEvent(new Event('input', { bubbles: true }));
+            inp.dispatchEvent(new Event('change', { bubbles: true }));
+            inp.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, keyCode: 13, key: 'Enter' }));
+            setTimeout(() => { b.style.backgroundColor = ''; b.style.transform = ''; }, 300);
+        }
+    };
+    p.removeEventListener('click', h); p.addEventListener('click', h);
+    p.removeEventListener('click', sh); p.addEventListener('click', sh);
+})();
+</script>
+""", unsafe_allow_html=True)
+
 
 # Sidebar - Filtering
 st.sidebar.title("")
@@ -464,540 +732,5 @@ selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
 if selected_colors:
     filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
 
-# --- Shortlist Management ---
-st.sidebar.divider()
-st.sidebar.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
-
-# View Shortlist Only Toggle
-view_mode = st.sidebar.toggle("View Shortlist Only", value=st.session_state.view_shortlist)
-st.session_state.view_shortlist = view_mode
-
-if st.session_state.view_shortlist:
-    filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
-
-# Shortlist All Visible Button
-if not filtered_df.empty:
-    if st.sidebar.button("Shortlist All Visible", use_container_width=True):
-        visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
-        st.session_state.shortlist.update(visible_parts)
-        st.rerun()
-
-# Clear Shortlist Button
-if st.sidebar.button("Clear All", use_container_width=True):
-    st.session_state.shortlist = set()
-    st.rerun()
-
-# --- Export Section ---
-if len(st.session_state.shortlist) > 0:
-    st.sidebar.divider()
-    st.sidebar.markdown("### 📥 Export Shortlist")
-    export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "PDF Gallery"])
-    
-    shortlist_data = df[df["Part Number"].isin(st.session_state.shortlist)]
-    
-    # Reorder columns as requested by user
-    cols = shortlist_data.columns.tolist()
-    ordered_cols = []
-    
-    # Simple prioritized list for the first few columns
-    # We want: Part Number, Collection, Arm/Table-Top, Product, Panel, Color, Type...
-    priority = ["Part Number", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
-    for p in priority:
-        if p in cols:
-            ordered_cols.append(p)
-            cols.remove(p)
-    
-    # Add remaining columns
-    ordered_cols.extend(cols)
-    shortlist_data = shortlist_data[ordered_cols]
-    
-    if export_format == "Excel (.xlsx)":
-        # Note: Requires openpyxl and pandas
-        try:
-            import io
-            import glob
-            import openpyxl.utils
-            output = io.BytesIO()
-            
-            # Get the absolute base directory
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            excel_files = glob.glob(os.path.join(base_dir, "*.xlsx"))
-            
-            # Use original df to get fresh data (bypassing any earlier reordering)
-            export_df = df[df["Part Number"].isin(st.session_state.shortlist)].copy()
-            unique_types = export_df["Collection Type"].unique()
-            
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                for coll_type in unique_types:
-                    parts_subset = export_df[export_df["Collection Type"] == coll_type]
-                    parts_list = parts_subset["Part Number"].tolist()
-                    
-                    # Try to find the exact original data from the master Excel files
-                    source_df = None
-                    for f in excel_files:
-                        try:
-                            xl = pd.ExcelFile(f)
-                            if coll_type in xl.sheet_names:
-                                source_df = pd.read_excel(f, sheet_name=coll_type)
-                                source_df = source_df[source_df["Part Number"].isin(parts_list)]
-                                break
-                        except Exception:
-                            continue
-                    
-                    # Use source data for fidelity, or fallback
-                    final_sheet_df = source_df.copy() if source_df is not None else parts_subset.copy()
-                    
-                    # 1. DROP unwanted columns (including "Thumbnail" and "_thumbnail_path")
-                    drop_cols = ["Thumbnail", "_thumbnail_path", "Local_Thumbnail", "Image_List", "Part Number_Link", "Collection Type"]
-                    final_sheet_df = final_sheet_df.drop(columns=[c for c in drop_cols if c in final_sheet_df.columns])
-                    
-                    # 2. Add Color_Link if missing (needed for hyperlinks, will be removed later)
-                    if "Color_Link" not in final_sheet_df.columns:
-                        link_map = export_df[["Part Number", "Color_Link"]].drop_duplicates()
-                        final_sheet_df = final_sheet_df.merge(link_map, on="Part Number", how="left")
-                    
-                    # 3. STRICT ORDERING
-                    cols = final_sheet_df.columns.tolist()
-                    if "Part Number" in cols:
-                        cols.insert(0, cols.pop(cols.index("Part Number")))
-                    
-                    if "Product" in cols:
-                        p_idx = cols.index("Product")
-                        if "Arm/Table-Top" in cols:
-                            cols.insert(p_idx, cols.pop(cols.index("Arm/Table-Top")))
-                            p_idx = cols.index("Product")
-                        if "Panel" in cols:
-                            cols.insert(p_idx + 1, cols.pop(cols.index("Panel")))
-                    
-                    final_sheet_df = final_sheet_df[cols]
-                    
-                    # 4. Write to sheet
-                    sheet_name = "".join([c for c in str(coll_type) if c not in r'[]:*?/\ '])[:31]
-                    final_sheet_df.to_excel(writer, index=False, sheet_name=sheet_name)
-                    
-                    # 5. POST-PROCESS for HYPERLINKS, STYLES, and VISIBILITY
-                    workbook = writer.book
-                    worksheet = writer.sheets[sheet_name]
-                    from openpyxl.styles import Font
-                    
-                    # Auto-width all columns
-                    for col in worksheet.columns:
-                        max_length = 0
-                        column_letter = col[0].column_letter
-                        for cell in col:
-                            if cell.value:
-                                max_length = max(max_length, len(str(cell.value)))
-                        worksheet.column_dimensions[column_letter].width = min(max_length + 2, 60)
-
-                    # Determine which color column to use
-                    color_col_name = "Cushion Color" if coll_type == "Cushions" else "Color"
-                    
-                    # Standard hyperlink style with font size 11
-                    h_font = Font(size=11, underline='single', color='0563C1')
-                    
-                    if color_col_name in final_sheet_df.columns and "Color_Link" in final_sheet_df.columns:
-                        c_idx = final_sheet_df.columns.get_loc(color_col_name) + 1
-                        l_idx = final_sheet_df.columns.get_loc("Color_Link") + 1
-                        
-                        for row_num in range(2, len(final_sheet_df) + 2):
-                            link_val = worksheet.cell(row=row_num, column=l_idx).value
-                            if link_val and str(link_val).startswith("http"):
-                                cell = worksheet.cell(row=row_num, column=c_idx)
-                                cell.hyperlink = link_val
-                                cell.font = h_font
-                                
-                        # REMOVE the Link column (actually delete it as requested)
-                        worksheet.delete_cols(l_idx)
-                        
-                    # HIDE Dropbox Folder Path if present
-                    if "Dropbox Folder Path" in final_sheet_df.columns:
-                        path_idx = final_sheet_df.columns.get_loc("Dropbox Folder Path") + 1
-                        # Note: If Color_Link was before this and deleted, indices shift. 
-                        # But final_sheet_df indices are still correct for original layout.
-                        # Since we delete Color_Link (which is usually at the end), we should be safe or re-check.
-                        # Better: calculate index based on existing columns in worksheet or re-check from DF.
-                        # Re-calculate indices after potential deletion
-                        current_headers = [cell.value for cell in worksheet[1]]
-                        if "Dropbox Folder Path" in current_headers:
-                            p_idx_ws = current_headers.index("Dropbox Folder Path") + 1
-                            worksheet.column_dimensions[openpyxl.utils.get_column_letter(p_idx_ws)].visible = False
-                    
-            st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                    
-
-        except Exception as e:
-            st.sidebar.error(f"Excel Export failed: {str(e)}")
-            st.sidebar.info("Ensure source Excel files are in the app directory.")
-    elif export_format == "PDF Gallery":
-        try:
-            from fpdf import FPDF
-            
-            class PDF(FPDF):
-                def header(self):
-                    self.set_font('helvetica', 'B', 22)
-                    self.set_text_color(30, 64, 175) # Premium Blue
-                    self.cell(0, 15, 'NORTHCAPE CATALOGUE', 0, 1, 'C')
-                    self.set_draw_color(226, 232, 240) # Slate-200
-                    self.line(10, 25, 200, 25)
-                    self.ln(10)
-                    
-                def footer(self):
-                    self.set_y(-15)
-                    self.set_font('helvetica', 'I', 8)
-                    self.set_text_color(148, 163, 184)
-                    self.cell(0, 10, f'Page {self.page_no()}', 0, 0, 'C')
-            
-            pdf = PDF()
-            pdf.set_auto_page_break(auto=False, margin=0)
-            pdf.add_page()
-            
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            thumb_dir = os.path.join(base_dir, "static", "thumbnails")
-            
-            # 3x3 Grid Settings (A4 is ~210x297mm)
-            margin = 10
-            gutter = 5
-            col_width = 60
-            row_height = 85 # Fits 3 rows (~255mm + margins)
-            
-            items_per_page = 9
-            current_col = 0
-            current_row = 0
-            
-            for i, (_, item) in enumerate(shortlist_data.iterrows()):
-                # New page every 9 items
-                if i > 0 and i % 9 == 0:
-                    pdf.add_page()
-                    current_col = 0
-                    current_row = 0
-                
-                # x = margin + (current_col * (col_width + gutter))
-                # y = 30 + (current_row * row_height) # Start below header
-                
-                cell_x = margin + (current_col * (col_width + gutter))
-                cell_y = 30 + (current_row * row_height)
-                
-                # 1. Image (Now FIRST and Zoomed)
-                thumb_path = item.get('Local_Thumbnail')
-                img_y_offset = cell_y
-                if thumb_path:
-                    fname = os.path.basename(thumb_path)
-                    abs_thumb = os.path.join(thumb_dir, fname)
-                    if os.path.exists(abs_thumb):
-                        # 125% zoom: Original was col_width-10 (50), now ~62.5
-                        # But col_width is 60, so we'll center it and use 58 to avoid gutter overlap
-                        img_w = 58 
-                        img_x = cell_x + (col_width - img_w) / 2
-                        pdf.image(abs_thumb, x=img_x, y=cell_y, w=img_w)
-                        img_y_offset += 48 # Increased offset to prevent overlap (original was 42)
-                
-                # 2. Part Number (Multi-cell)
-                pdf.set_xy(cell_x, img_y_offset + 2)
-                pdf.set_font('helvetica', 'B', 8)
-                pdf.set_text_color(15, 23, 42)
-                pdf.multi_cell(col_width, 4, str(item['Part Number']), ln=0, align='C')
-                
-                details_y = pdf.get_y() + 1
-                
-                # 3. Details (Conditional Ordering)
-                pdf.set_font('helvetica', '', 7)
-                st_type = str(item.get('Type', '')).strip()
-                product_val = str(item.get('Product', '')).lower()
-                is_table = 'table' in product_val
-                
-                if st_type == "Cushion":
-                    # Cushions: Type, Collection, Color
-                    fields = [
-                        ("Type", item.get('Type')),
-                        ("Collection", item.get('Collection')),
-                        ("Color", item.get('Color'))
-                    ]
-                else:
-                    # Furniture/Default: Type, Product, Arm, Panel, Color
-                    fields = [
-                        ("Type", item.get('Type')),
-                        ("Product", item.get('Product')),
-                        ("Arm/Table-Top", item.get('Arm/Table-Top')),
-                        ("Panel", item.get('Panel'))
-                    ]
-                    if not is_table:
-                        fields.append(("Color", item.get('Color')))
-                    # Collection is secondary for furniture
-                    fields.append(("Collection", item.get('Collection')))
-                
-                pdf.set_xy(cell_x, details_y)
-                details_text = ""
-                for label, val in fields:
-                    if pd.notna(val) and str(val).strip() and str(val).lower() != 'nan':
-                        details_text += f"{label}: {val}\n"
-                
-                # Centered block with left-aligned labels
-                block_width = 50
-                indent = (col_width - block_width) / 2
-                pdf.set_x(cell_x + indent)
-                
-                pdf.set_text_color(100, 116, 139)
-                pdf.multi_cell(block_width, 3.5, details_text, ln=0, align='L')
-                
-                # Move to next column/row
-                current_col += 1
-                if current_col >= 3:
-                    current_col = 0
-                    current_row += 1
-
-            pdf_data = bytes(pdf.output())
-            st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf")
-            
-            # --- PDF Preview Section ---
-            st.sidebar.divider()
-            st.sidebar.markdown("### 👁️ PDF Preview")
-            if st.sidebar.button("Show Preview"):
-                base64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-                pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800" type="application/pdf"></iframe>'
-                st.markdown(pdf_display, unsafe_allow_html=True)
-                st.toast("PDF Preview Generated Below!", icon="📄")
-        except Exception as e:
-            st.sidebar.error(f"PDF Error: {str(e)}")
-
-# Main Content - Premium Header
-st.markdown("""
-<div class="hero-container">
-    <div class="hero-title">NorthCape Image Library</div>
-</div>
-""", unsafe_allow_html=True)
-
-# Search Bar (Match Reference)
-search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
-if search_query:
-    q = search_query.lower()
-    # Search across all relevant text-based columns
-    searchable_cols = [c for c in filtered_df.columns if not c.endswith("Image") and c != "Local_Thumbnail" and c != "Color_Link" and c != "Image_List"]
-    mask = filtered_df[searchable_cols].apply(
-        lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1
-    )
-    filtered_df = filtered_df[mask]
-
-st.caption(f"Showing {len(filtered_df)} records")
-
-# Pagination
-items_per_page = 25 # Increased for dynamic layout (multiple of 5)
-total_pages = max(1, (len(filtered_df) - 1) // items_per_page + 1)
-page = st.sidebar.number_input("Page", min_value=1, max_value=total_pages, value=1)
-start_idx = (page - 1) * items_per_page
-end_idx = start_idx + items_per_page
-
-market_col_prefix = {
-    "Northcape": "Northcape Image",
-    "Overstock": "Overstock Image",
-    "Wayfair": "Wayfair Image",
-    "Home Depot": "Home Depot Image"
-}[selected_market]
-
-paged_data = filtered_df.iloc[start_idx:end_idx]
-
-# Start of the responsive grid
-grid_html = '<div class="card-grid">'
-
-# Define which fields to show in the card footer based on Type
-# If Furniture: Product, Color, Arm/Table-Top, Panel
-# If Cushions: Color, and potentially others if they exist
-# Actually, let's just show all non-technical fields that have data
-TECHNICAL_FIELDS = [
-    "Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", 
-    "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", 
-    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
-]
-
-for i, (_, item) in enumerate(paged_data.iterrows()):
-    # Prepare all available thumbnails for this item
-    image_list = item.get("Image_List", [])
-    if not image_list and item.get("Local_Thumbnail"):
-        image_list = [item["Local_Thumbnail"]]
-        
-    # Get base64 for the top 3 images for instant swapping
-    b64_images = []
-    for thumb_path in image_list[:3]:
-        b64 = get_base64_img(thumb_path)
-        if b64: b64_images.append(b64)
-    
-    # Fallback to primary if empty
-    if not b64_images:
-        primary_b64 = get_base64_img(item.get("Local_Thumbnail"))
-        if primary_b64: b64_images = [primary_b64]
-    
-    img_src = b64_images[0] if b64_images else ""
-    
-    # Check if item is shortlisted
-    is_shortlisted = item["Part Number"] in st.session_state.shortlist
-    shortlist_class = "active" if is_shortlisted else ""
-    shortlist_icon = "⭐" if is_shortlisted else "☆"
-
-    # Store list as Base64-encoded JSON to avoid any HTML attribute mangling
-    b64_json_str = json.dumps(b64_images)
-    b64_data_attr = base64.b64encode(b64_json_str.encode()).decode()
-
-    # Card Content Logic (Conditionally hide empty/nan values)
-    def get_val(key):
-        val = item.get(key)
-        return str(val) if pd.notna(val) and str(val).lower() != "nan" and str(val).strip() != "" else None
-
-    # Determine fields to display dynamically
-    display_fields = []
-    product_val_card = str(item.get('Product', '')).lower()
-    is_table_card = 'table' in product_val_card
-    
-    for key in item.keys():
-        if key not in TECHNICAL_FIELDS and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
-            # Special check for Color on Tables
-            if key == "Color" and is_table_card:
-                continue
-            val = get_val(key)
-            if val:
-                display_fields.append((key, val))
-
-    def row_html(label, val):
-        if not val: return ""
-        # Handle special color link if it's the color row
-        final_val = val
-        if label == "Color" and pd.notna(item.get('Color_Link')):
-             final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
-        return f'<div class="detail-row"><span class="detail-label">{label}</span><span class="detail-value">{final_val}</span></div>'
-
-    # Image Count Badges Logic
-    image_stats_html = ""
-    for label, col in [("NC", "NC Image Count"), ("OS", "OS Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]:
-        count = item.get(col, 0)
-        if pd.notna(count) and count > 0:
-            image_stats_html += f'<div class="detail-row"><span class="detail-label">{label} Images</span><span class="detail-value">{int(count)}</span></div>'
-
-    # Swap Button HTML (only if more than 1 image)
-    swap_html = ""
-    if len(b64_images) > 1:
-        # Use a data-target and explicit pointer-events for reliability
-        swap_html = f'<div class="swap-btn" data-swap-target="img-{i}" title="Next Image" style="cursor: pointer; pointer-events: auto;">🔄</div>'
-
-    # Build detail rows for fields
-    detail_rows_html = "".join([row_html(lbl, v) for lbl, v in display_fields])
-
-    # Build card HTML with unique ID for image and data-urls for swapping
-    card_html = (
-        f'<div class="product-card" style="position: relative;">'
-            f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Shortlist">{shortlist_icon}</div>'
-            f'<div class="card-header">'
-                f'<div class="badge">{item["Collection Type"]}</div>'
-                f'<div class="part-number">{item["Part Number"]}</div>'
-                f'<div class="collection-text">{item["Collection"]}</div>'
-            f'</div>'
-            f'<div class="image-container">'
-                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0">'
-                f'{swap_html}'
-            f'</div>'
-            f'<div class="card-footer">'
-                f'{detail_rows_html}'
-                f'<div style="margin-top: 8px; border-top: 1px solid #f1f5f9; padding-top: 8px;">'
-                    f'{image_stats_html}'
-                f'</div>'
-            f'</div>'
-        f'</div>'
-    )
-    grid_html += card_html
-
-grid_html += '</div>'
-
-# 1. Inject the Grid HTML
-st.markdown(grid_html, unsafe_allow_html=True)
-
-# 2. Inject the Image Swapper Script
-# This uses an iframe-to-parent hack to bypass sanitization
-# It attaches a capture-phase listener to the parent document
-js_swap_html = """
-<script>
-(function() {
-    const parentDoc = window.parent.document;
-    
-    // 1. Image Swapper Handler
-    const handler = function(e) {
-        const btn = e.target.closest('.swap-btn');
-        if (!btn) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const targetId = btn.getAttribute('data-swap-target');
-        const img = parentDoc.getElementById(targetId);
-        if (!img) return;
-        
-        try {
-            const b64Data = img.getAttribute('data-urls-b64');
-            const urls = JSON.parse(atob(b64Data));
-            if (!urls || urls.length < 2) return;
-            
-            let idx = parseInt(img.getAttribute('data-idx')) || 0;
-            idx = (idx + 1) % urls.length;
-            
-            img.src = urls[idx];
-            img.setAttribute('data-idx', idx);
-        } catch (err) {
-            console.error("Swap Error:", err);
-        }
-    };
-    
-    // 2. Shortlist Toggle Handler (V7 - Event Aggression)
-    const shortlistHandler = function(e) {
-        const btn = e.target.closest('.shortlist-btn');
-        if (!btn) return;
-        
-        const part = btn.getAttribute('data-part');
-        console.log("NC Checklist: Star Toggled for", part);
-        
-        // Find input by unique placeholder
-        let targetInput = parentDoc.querySelector('input[placeholder="sync_bridge_v7"]');
-        
-        if (targetInput) {
-            btn.style.backgroundColor = '#fef08a'; // Immediate feedback
-            btn.style.transform = 'scale(0.8)';
-            
-            const syncValue = part + "|" + Date.now();
-            
-            // 1. Focus the input
-            targetInput.focus();
-            
-            // 2. Set value via native setter (React compliance)
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            setter.call(targetInput, syncValue);
-            
-            // 3. Dispatch events to trigger change detection
-            targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-            targetInput.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            // 4. Force submit via Enter key
-            const enterEv = new KeyboardEvent('keydown', {
-                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
-            });
-            targetInput.dispatchEvent(enterEv);
-            
-            // 5. Blur to finalize
-            targetInput.blur();
-            
-            console.log("NC Checklist: V7 Bridge Sent Toggle Signal");
-            
-            setTimeout(() => {
-                btn.style.backgroundColor = '';
-                btn.style.transform = '';
-            }, 500);
-        } else {
-            console.error("NC Checklist Error: V7 Sync Input not found in DOM");
-        }
-    };
-    
-    // 3. Persistent Connection via V7 Flag
-    if (parentDoc._nc_v7_active) return;
-    parentDoc._nc_v7_active = true;
-
-    parentDoc.addEventListener('click', handler, true);
-    parentDoc.addEventListener('click', shortlistHandler, true);
-    console.log("NC Checklist: V7 Listeners Active");
-})();
-</script>
-"""
-components.html(js_swap_html, height=0)
+# Run the fragment
+render_main_ui(filtered_df)
