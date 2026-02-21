@@ -367,7 +367,7 @@ def get_base64_img(thumb_path):
 
 # --- Main UI Rendering (Optimized with st.fragment) ---
 @st.fragment
-def render_main_ui(filtered_df):
+def render_main_ui(filtered_df, sb_placeholder):
     # 1. Shortlist Sync Bridge (V7 - Local Re-run)
     sync_key = f"sync_v7_{st.session_state.sync_counter}"
     # Invisible input for JS communication
@@ -387,8 +387,8 @@ def render_main_ui(filtered_df):
         except Exception:
             pass
 
-    # 2. Sidebar Shortlist & Export Section (In Fragment to update count instantly)
-    with st.sidebar:
+    # 2. Sidebar Shortlist & Export Section (Uses placeholder to prevent stacking)
+    with sb_placeholder.container():
         st.divider()
         st.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
         
@@ -732,5 +732,8 @@ selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
 if selected_colors:
     filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
 
+# Sidebar Placeholder for Fragment Content (Stops stacking & API errors)
+sidebar_shortlist_placeholder = st.sidebar.empty()
+
 # Run the fragment
-render_main_ui(filtered_df)
+render_main_ui(filtered_df, sidebar_shortlist_placeholder)
