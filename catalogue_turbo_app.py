@@ -515,15 +515,17 @@ st.markdown("""
         [data-testid="stSidebar"] {
             position: fixed !important;
             left: 0 !important;
-            top: 0 !important;
+            top: 60px !important;
             bottom: 0 !important;
             width: 100% !important;
             max-width: 100% !important;
-            z-index: 2001 !important;
+            z-index: 2000 !important;
             background: white !important;
             transform: translateY(100%) !important;
             transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
             overflow-y: auto !important;
+            border-top-left-radius: 16px !important;
+            border-top-right-radius: 16px !important;
         }
 
         /* Show sidebar when modal is open */
@@ -567,7 +569,7 @@ st.markdown("""
             right: 0;
             bottom: 0;
             background: rgba(0, 0, 0, 0.5);
-            z-index: 2000;
+            z-index: 2001;
             display: none;
             align-items: flex-start;
             justify-content: center;
