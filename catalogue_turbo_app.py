@@ -738,7 +738,7 @@ if sync_val and "|" in sync_val:
 
 # Sidebar - Filtering
 st.sidebar.title("")
-selected_market = st.sidebar.selectbox("CHANNEL", ["Northcape", "Overstock", "Wayfair", "Home Depot"])
+selected_market = st.sidebar.selectbox("CHANNEL", ["All", "Northcape", "BY", "Wayfair", "Home Depot"])
 
 st.sidebar.divider()
 
@@ -754,17 +754,18 @@ df = pd.DataFrame(data)
 # Channel to Count Column Mapping
 channel_to_count = {
     "Northcape": "NC Image Count",
-    "Overstock": "OS Image Count",
+    "BY": "BY Image Count",
     "Wayfair": "WF Image Count",
     "Home Depot": "HD Image Count"
 }
 
-# Filter by Channel (Image Count > 0)
-count_col = channel_to_count.get(selected_market)
-if count_col and count_col in df.columns:
-    # Force numeric conversion for reliability
-    df[count_col] = pd.to_numeric(df[count_col], errors='coerce').fillna(0)
-    df = df[df[count_col] > 0]
+# Filter by Channel (Image Count > 0) - skip when "All" is selected
+if selected_market != "All":
+    count_col = channel_to_count.get(selected_market)
+    if count_col and count_col in df.columns:
+        # Force numeric conversion for reliability
+        df[count_col] = pd.to_numeric(df[count_col], errors='coerce').fillna(0)
+        df = df[df[count_col] > 0]
 
 # Safety check for empty data or missing columns
 if df.empty or "Collection Type" not in df.columns:
@@ -1162,8 +1163,9 @@ start_idx = (page - 1) * items_per_page
 end_idx = start_idx + items_per_page
 
 market_col_prefix = {
+    "All": "Northcape Image",
     "Northcape": "Northcape Image",
-    "Overstock": "Overstock Image",
+    "BY": "Overstock Image",
     "Wayfair": "Wayfair Image",
     "Home Depot": "Home Depot Image"
 }[selected_market]
@@ -1179,7 +1181,7 @@ grid_html = '<div class="card-grid">'
 # Actually, let's just show all non-technical fields that have data
 TECHNICAL_FIELDS = [
     "Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", 
-    "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", 
+    "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", "BY Image Count",
     "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
 ]
 
@@ -1240,7 +1242,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
     # Image Count Badges Logic
     image_stats_html = ""
-    for label, col in [("NC", "NC Image Count"), ("OS", "OS Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]:
+    for label, col in [("NC", "NC Image Count"), ("BY", "BY Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]:
         count = item.get(col, 0)
         if pd.notna(count) and count > 0:
             image_stats_html += f'<div class="detail-row"><span class="detail-label">{label} Images</span><span class="detail-value">{int(count)}</span></div>'

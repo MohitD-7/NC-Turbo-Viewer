@@ -15,8 +15,29 @@ THUMBNAIL_SIZE = (400, 400)
 MAX_THREADS = 15  # Slower but more reliable (prevents throttling)
 PUBLIC_THUMBS_DIR = os.path.join(BASE_DIR, "static", "thumbnails")
 DATA_DIR = os.path.join(BASE_DIR, "data")
-# Support multiple excel files
-EXCEL_FILES = glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
+# Support multiple excel files - but use only the NEWEST cushion file to avoid duplicates
+# Sort by modification time descending so newest come first
+all_excel = glob.glob(os.path.join(BASE_DIR, "*.xlsx"))
+all_excel.sort(key=lambda p: os.path.getmtime(p), reverse=True)
+
+# De-duplicate: if multiple files have the same sheet names, keep only the newest
+# For cushion files specifically, keep only the newest one
+EXCEL_FILES = []
+seen_cushion = False
+for f in all_excel:
+    fname_lower = os.path.basename(f).lower()
+    # Skip temp/lock files
+    if os.path.basename(f).startswith('~'):
+        continue
+    # For cushion-specific files, only keep the newest
+    if 'cushion' in fname_lower:
+        if not seen_cushion:
+            EXCEL_FILES.append(f)
+            seen_cushion = True
+        # else skip older cushion files
+    else:
+        EXCEL_FILES.append(f)
+
 JSON_OUTPUT = os.path.join(DATA_DIR, "catalogue.json")
 
 def extract_link(formula):
@@ -178,9 +199,9 @@ def update_catalogue():
         final_data = list(executor.map(process_item, catalogue_data))
 
     print("\n--- Thumbnail Statistics ---")
-    print(f"  ✅ Priority _1 Image: {stats['primary_1']}")
-    print(f"  ℹ️  Clean product shot (no logo): {stats['no_logo']}")
-    print(f"  ⚠️  Fallback (may include logo): {stats['fallback']}")
+    print(f"  [OK] Priority _1 Image: {stats['primary_1']}")
+    print(f"  [i]  Clean product shot (no logo): {stats['no_logo']}")
+    print(f"  [!]  Fallback (may include logo): {stats['fallback']}")
     print("---------------------------\n")
 
     with open(JSON_OUTPUT, 'w', encoding='utf-8') as f:
