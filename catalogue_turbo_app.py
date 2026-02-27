@@ -738,7 +738,19 @@ if sync_val and "|" in sync_val:
 
 # Sidebar - Filtering
 st.sidebar.title("")
-selected_market = st.sidebar.selectbox("CHANNEL", ["All", "Northcape", "BY", "Wayfair", "Home Depot"])
+all_channels = ["Northcape", "Overstock", "Wayfair", "Home Depot"]
+
+# Channel selection: checkbox for All, multiselect for specific channels
+show_all = st.sidebar.checkbox("All Channels", value=True, key="all_channels_toggle")
+
+if show_all:
+    selected_channels = ["All"]
+else:
+    selected_channels = st.sidebar.multiselect("CHANNEL", all_channels, default=[all_channels[0]])
+    if len(selected_channels) > 1:
+        channel_logic = st.sidebar.radio("Match", ["OR - any selected channel", "AND - all selected channels"], horizontal=True, key="channel_logic")
+    else:
+        channel_logic = "OR — any selected channel"
 
 st.sidebar.divider()
 
@@ -754,18 +766,25 @@ df = pd.DataFrame(data)
 # Channel to Count Column Mapping
 channel_to_count = {
     "Northcape": "NC Image Count",
-    "BY": "BY Image Count",
+    "Overstock": "BY Image Count",
     "Wayfair": "WF Image Count",
     "Home Depot": "HD Image Count"
 }
 
-# Filter by Channel (Image Count > 0) - skip when "All" is selected
-if selected_market != "All":
-    count_col = channel_to_count.get(selected_market)
-    if count_col and count_col in df.columns:
-        # Force numeric conversion for reliability
-        df[count_col] = pd.to_numeric(df[count_col], errors='coerce').fillna(0)
-        df = df[df[count_col] > 0]
+# If "All" is selected, treat as no channel filter
+if "All" not in selected_channels and selected_channels:
+    use_and = len(selected_channels) > 1 and channel_logic.startswith("AND")
+    # Start with True for AND, False for OR
+    channel_mask = pd.Series(use_and, index=df.index)
+    for ch in selected_channels:
+        count_col = channel_to_count.get(ch)
+        if count_col and count_col in df.columns:
+            df[count_col] = pd.to_numeric(df[count_col], errors='coerce').fillna(0)
+            if use_and:
+                channel_mask = channel_mask & (df[count_col] > 0)
+            else:
+                channel_mask = channel_mask | (df[count_col] > 0)
+    df = df[channel_mask]
 
 # Safety check for empty data or missing columns
 if df.empty or "Collection Type" not in df.columns:
@@ -1162,13 +1181,15 @@ page = st.sidebar.number_input("Page", min_value=1, max_value=total_pages, value
 start_idx = (page - 1) * items_per_page
 end_idx = start_idx + items_per_page
 
-market_col_prefix = {
-    "All": "Northcape Image",
+channel_to_prefix = {
     "Northcape": "Northcape Image",
-    "BY": "Overstock Image",
+    "Overstock": "Overstock Image",
     "Wayfair": "Wayfair Image",
     "Home Depot": "Home Depot Image"
-}[selected_market]
+}
+# Use the first non-"All" channel's prefix, or default to Northcape
+first_channel = next((ch for ch in selected_channels if ch != "All"), "Northcape")
+market_col_prefix = channel_to_prefix.get(first_channel, "Northcape Image")
 
 paged_data = filtered_df.iloc[start_idx:end_idx]
 
