@@ -7,6 +7,7 @@ from PIL import Image
 from io import BytesIO
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
+import shutil
 import glob
 
 # --- Configuration ---
@@ -56,6 +57,30 @@ def get_value_from_formula(formula):
         return match.group(2)
     return str(formula)
 
+def get_legacy_urls(url):
+    """Generate old-naming URL variants to find existing cached thumbnails.
+
+    Handles the rename: NC->NCI (Northcape), WF-NC->NC (Wayfair), BY- unchanged.
+    Given a NEW url, produces the OLD url so we can find cached thumbnails.
+    """
+    legacy = []
+    match = re.search(r'(/fi/[^/]+/)([^?]+)', url)
+    if not match:
+        return legacy
+    path_prefix, filename = match.group(1), match.group(2)
+
+    # NCI -> NC (Northcape was renamed from NC to NCI)
+    if re.match(r'NCI\d', filename):
+        old_name = re.sub(r'^NCI', 'NC', filename)
+        legacy.append(url.replace(path_prefix + filename, path_prefix + old_name))
+
+    # NC (standalone) -> WF-NC (Wayfair had WF- prefix before)
+    if re.match(r'NC\d', filename) and not filename.startswith('BY-'):
+        old_name = 'WF-' + filename
+        legacy.append(url.replace(path_prefix + filename, path_prefix + old_name))
+
+    return legacy
+
 def download_and_resize(url, part_number):
     if not url or "dropbox.com" not in url:
         return None
@@ -67,6 +92,14 @@ def download_and_resize(url, part_number):
     # Skip if already exists (avoids duplicate work)
     if os.path.exists(thumb_path):
         return f"thumbnails/{thumb_name}"
+
+    # Check for thumbnail cached under legacy (old naming) URL
+    for legacy_url in get_legacy_urls(url):
+        legacy_hash = hashlib.md5(legacy_url.encode()).hexdigest()
+        legacy_path = os.path.join(PUBLIC_THUMBS_DIR, f"{legacy_hash}.jpg")
+        if os.path.exists(legacy_path):
+            shutil.copy2(legacy_path, thumb_path)
+            return f"thumbnails/{thumb_name}"
 
     try:
         raw_url = url.replace("dl=0", "raw=1").replace("dl=1", "raw=1")

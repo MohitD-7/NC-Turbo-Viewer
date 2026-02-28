@@ -1162,7 +1162,7 @@ mobile_filter_js = """
 components.html(mobile_filter_js, height=0)
 
 # Search Bar (Match Reference)
-search_query = st.text_input("", placeholder="🔍 Search Part Number, Collection, Color...")
+search_query = st.text_input("Search Catalogue", placeholder="🔍 Search Part Number, Collection, Color...", label_visibility="collapsed")
 if search_query:
     q = search_query.lower()
     # Search across all relevant text-based columns
