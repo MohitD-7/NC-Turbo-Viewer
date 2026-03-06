@@ -675,9 +675,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Data Loading with Caching
+# Data Loading with Caching - Auto busts when file changes
 @st.cache_data
-def load_catalogue_data():
+def load_catalogue_data(file_mtime):
     # Use absolute path relative to this script's directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(base_dir, "data", "catalogue.json")
@@ -688,7 +688,10 @@ def load_catalogue_data():
     print(f"Warning: Data file not found at {json_path}")
     return []
 
-data = load_catalogue_data()
+base_dir = os.path.dirname(os.path.abspath(__file__))
+json_path = os.path.join(base_dir, "data", "catalogue.json")
+mtime = os.path.getmtime(json_path) if os.path.exists(json_path) else 0
+data = load_catalogue_data(mtime)
 
 # --- Shortlist Session State ---
 if 'shortlist' not in st.session_state:
