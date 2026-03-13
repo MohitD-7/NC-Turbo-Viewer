@@ -3,6 +3,7 @@ import json
 import os
 import pandas as pd
 import base64
+import hashlib
 import streamlit.components.v1 as components
 
 # Page Configuration
@@ -12,6 +13,432 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="auto"  # Auto-collapses on mobile (<768px)
 )
+
+# --- Authentication System ---
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def check_authentication():
+    return st.session_state.get('authenticated', False)
+
+def get_user_role():
+    return st.session_state.get('user_role', None)
+
+def login_page():
+    # Native Static Serving with Cache-Busting: 
+    # We append the file's modification time as a version (?v=...) 
+    # This forces the browser to discard its cache and load the new 14.9MB image instantly.
+    static_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "LP-Banner.jpg")
+    v_time = int(os.path.getmtime(static_path)) if os.path.exists(static_path) else 0
+    bg_img = f'url("app/static/LP-Banner.jpg?v={v_time}")'
+
+    st.markdown(f"""
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+        #MainMenu {{visibility: hidden;}}
+        header {{visibility: hidden;}}
+        footer {{visibility: hidden;}}
+        [data-testid="stToolbar"] {{visibility: hidden !important;}}
+        [data-testid="stSidebar"] {{display: none !important;}}
+        [data-testid="stDecoration"] {{display: none !important;}}
+
+        /* Background image — always fills the screen */
+        .stApp {{
+            font-family: 'Inter', sans-serif;
+            background-image: {bg_img} !important;
+            background-size: cover !important;
+            background-position: center center !important;
+            background-repeat: no-repeat !important;
+            background-attachment: fixed !important;
+            background-color: #1a2332 !important;
+            min-height: 100vh !important;
+            overflow-y: auto;
+            transition: background-position 0.3s ease-out !important;
+        }}
+
+        @keyframes fadeSlideUp {{
+            from {{ opacity: 0; transform: translateY(20px); }}
+            to {{ opacity: 1; transform: translateY(0); }}
+        }}
+
+        /* Card container — geometrically centred */
+        .block-container {{
+            max-width: 575px !important; /* Increased by 15% from 500px */
+            width: 100% !important;
+            position: absolute !important;
+            top: 42% !important; /* Move card 2% higher */
+            left: 50% !important;
+            transform: translate(-50%, -50%) !important;
+            padding: 0 !important;
+            z-index: 1;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }}
+
+        /* Form always fills its container width */
+        [data-testid="stForm"] {{
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }}
+
+        /* --- FINAL POLISHED FROSTED GLASS --- */
+        [data-testid="stForm"] {{
+            /* Keep it transparent so the now-bright background shines through */
+            background: rgba(255, 255, 255, 0.55) !important; 
+            
+            /* High blur to create the "frost," but no heavy color filters needed now */
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            
+            /* Add a subtle inner-glow to make the glass feel like it has depth */
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15), 
+                        inset 0 0 0 1px rgba(255, 255, 255, 0.5) !important;
+            
+            /* Sharp, thin border to define the edge */
+            border: 1px solid rgba(255, 255, 255, 0.8) !important;
+            
+            border-radius: 20px !important;
+            padding: 1.15rem 2.3rem !important;
+            animation: fadeSlideUp 0.6s ease-out;
+        }}
+
+        /* Hide column gap lines if any */
+        [data-testid="stForm"] [data-testid="stHorizontalBlock"] {{
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 1.5rem !important; /* Reduced gap for a tighter look */
+            align-items: flex-start !important; /* Align left and right columns to the top */
+            justify-content: center !important;
+        }}
+        [data-testid="stForm"] [data-testid="stHorizontalBlock"] > div {{
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+        }}
+
+        /* Left branding panel - Desktop 2-column look */
+        .login-brand-panel {{
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Push all items to top */
+            align-items: center; /* Center aligned */
+            text-align: center; /* Center aligned */
+            padding-top: 0.5rem !important; /* Tiny top breathing room */
+            padding-right: 1.5rem !important; /* Gives breathing room to the divider line */
+            border-right: 1px solid #A0ABC0; /* Faded brand-coordinated blue */
+            min-height: unset !important; /* Don't stretch vertically */
+        }}
+        .login-brand-panel h1 {{
+            color: #1a3b7a;
+            font-size: 3.2rem; /* Increased from 2.8rem (~15%) */
+            font-weight: 900;
+            letter-spacing: 0.02em;
+            /* text-transform: uppercase; removed to show exact casing */
+            white-space: nowrap;
+            margin: 0 auto 0.1rem auto !important; /* Top center aligned, very small bottom margin */
+            line-height: 1.0; /* Tighter line height to cut invisible padding */
+            display: block !important;
+            text-align: center !important; /* Ensure string is exactly centered */
+        }}
+        /* Hide Streamlit header action (link) icons */
+        [data-testid="stHeaderActionElements"], .st-header-action {{
+            display: none !important;
+        }}
+        .login-brand-panel .subtitle {{
+            color: #1e293b;
+            font-size: 0.9rem;
+            font-weight: 700; /* Increased weight for crispness */
+            letter-spacing: 0.2em;
+            text-transform: uppercase;
+            margin: 0;
+            text-shadow: none;
+        }}
+        .login-brand-panel .divider {{
+            width: 200px;
+            height: 2px;
+            background: #1a3b7a; /* Brand Navy Blue */
+            margin: 0.1rem auto 0.3rem auto; /* Very tight spacing around divider */
+            border-radius: 1px;
+            opacity: 1;
+        }}
+        .login-brand-panel .tagline {{
+            color: #1e293b;
+            opacity: 0.8;
+            font-size: 0.8rem;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+            margin-top: 0.1rem;
+        }}
+
+        /* --- UNIFIED FULL-WIDTH INPUTS --- */
+        
+        /* Force outer container to take full width */
+        [data-testid="stForm"] [data-testid="stTextInput"] {{
+            width: 100% !important;
+            box-sizing: border-box !important;
+        }}
+
+        /* Target the actual white input box wrapper (fixes unequal lengths) */
+        [data-testid="stForm"] [data-testid="stTextInput"] div[data-baseweb="input"] {{
+            width: 100% !important;
+            background-color: #FFFFFF !important;
+            border: 1px solid #CBD5E1 !important;
+            border-radius: 8px !important;
+            overflow: hidden !important; /* Keeps corners clean */
+            padding: 0 !important; /* Removes default Streamlit padding */
+        }}
+
+        /* The text you actually type */
+        [data-testid="stForm"] [data-testid="stTextInput"] input {{
+            background-color: transparent !important; /* Let white wrapper show through */
+            color: #1e293b !important;
+            padding: 0.75rem 1rem !important;
+            width: 100% !important;
+            box-sizing: border-box !important;
+            border: none !important;
+        }}
+
+        /* STRIP the grey background from Streamlit's eye icon container */
+        [data-testid="stForm"] [data-testid="stTextInput"] div[data-baseweb="input"] > div {{
+            background-color: transparent !important; 
+        }}
+
+        /* Style the eye button itself */
+        [data-testid="stForm"] [data-testid="stTextInput"] button {{
+            background-color: transparent !important;
+            border: none !important;
+            padding-right: 0.8rem !important;
+            color: #64748b !important; /* Neutral grey for the eye icon */
+            box-shadow: none !important;
+        }}
+
+        /* Clean focus state (blue highlight when clicking into box) */
+        [data-testid="stForm"] [data-testid="stTextInput"] div[data-baseweb="input"]:focus-within {{
+            border-color: #1a3b7a !important;
+            box-shadow: 0 0 0 2px rgba(26, 59, 122, 0.15) !important;
+        }}
+
+        /* Hide "Press Enter to submit" */
+        [data-testid="stForm"] [data-testid="InputInstructions"] {{
+            display: none !important;
+        }}
+
+        /* Labels */
+        [data-testid="stForm"] label {{
+            color: #0f172a !important; /* Deepest slate */
+            font-weight: 700 !important;
+            font-size: 0.85rem !important;
+            letter-spacing: 0.02em !important;
+            text-shadow: none !important;
+        }}
+
+        /* Submit button — brand blue */
+        [data-testid="stForm"] [data-testid="stFormSubmitButton"] button {{
+            background: #1a3b7a !important;
+            color: white !important;
+            border: none !important;
+            border-radius: 10px !important;
+            padding: 0.75rem 1.5rem !important;
+            font-weight: 700 !important;
+            font-size: 0.95rem !important;
+            letter-spacing: 0.02em !important;
+            transition: all 0.2s !important;
+            margin-top: 0.5rem !important;
+        }}
+        [data-testid="stForm"] [data-testid="stFormSubmitButton"] button:hover {{
+            background: #243f8a !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+        }}
+
+        /* Error messages */
+        [data-testid="stForm"] .stAlert {{
+            background: rgba(255, 255, 255, 0.15) !important;
+            border: 1px solid rgba(255, 255, 255, 0.2) !important;
+            border-radius: 10px !important;
+            color: white !important;
+        }}
+
+        /* ── Mobile: stack brand panel + inputs vertically ── */
+        @media (max-width: 768px) {{
+
+            /* Mobile fixes to restore relative positioning for scrolling */
+            .block-container {{
+                position: relative !important;
+                top: auto !important;
+                left: auto !important;
+                transform: none !important;
+                max-width: 440px !important; /* Increased by 15% from 380px */
+                margin-left: auto !important;
+                margin-right: auto !important;
+                padding-left: 1rem !important;
+                padding-right: 1rem !important;
+                padding-top: 0.5rem !important;
+                padding-bottom: 0.5rem !important;
+            }}
+
+            /* Compact card padding — vertically slim on mobile */
+            [data-testid="stForm"] {{
+                padding: 0.6rem 1.25rem !important;
+            }}
+
+            /* Override Streamlit's internal CSS grid to force single-column stacking */
+            [data-testid="stForm"] [data-testid="stHorizontalBlock"] {{
+                display: grid !important;
+                grid-template-columns: 1fr !important;
+                flex-direction: column !important; /* fallback */
+                gap: 0.4rem !important;
+            }}
+
+            /* Each column takes full grid row */
+            [data-testid="stForm"] [data-testid="stHorizontalBlock"] [data-testid="stColumn"] {{
+                width: 100% !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+            }}
+
+            /* Brand panel: Stack elements vertically under NorthCape */
+            .login-brand-panel {{
+                border-right: none !important;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+                padding-right: 0 !important;
+                padding-bottom: 0.4rem !important;
+                min-height: unset !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                justify-content: center !important;
+                text-align: center !important;
+                gap: 0.1rem !important;
+            }}
+
+            .login-brand-panel h1 {{
+                font-size: 2.4rem !important; /* Increased font size for mobile */
+                margin-bottom: 0.1rem !important;
+                width: 100% !important;
+                text-align: center !important;
+            }}
+
+            .login-brand-panel .subtitle {{
+                font-size: 0.8rem !important;
+            }}
+
+            .login-brand-panel .tagline {{
+                font-size: 0.7rem !important;
+                margin-top: 0 !important;
+            }}
+
+            /* Hide decorative divider on mobile */
+            .login-brand-panel .divider {{
+                display: none !important;
+            }}
+        }}
+
+        /* ── Very small phones (< 420px) ── */
+        @media (max-width: 420px) {{
+            [data-testid="stForm"] {{
+                padding: 1.25rem 1rem !important;
+                border-radius: 14px !important;
+            }}
+
+            .login-brand-panel h1 {{
+                font-size: 2.0rem !important; /* Increased font size for tiny phones */
+            }}
+        }}
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Mouse-tracking parallax on background image
+    components.html("""
+    <script>
+    (function() {
+        var doc = window.parent.document;
+        // Clean up catalogue handlers from previous session
+        if (window.parent._nc_handlers) {
+            var old = window.parent._nc_handlers;
+            for (var k in old) { if (typeof old[k] === 'function') { doc.removeEventListener('click', old[k], true); doc.removeEventListener('touchstart', old[k], true); doc.removeEventListener('keydown', old[k]); } }
+            window.parent._nc_handlers = null;
+        }
+
+        var app = doc.querySelector('.stApp');
+        if (!app || app._parallaxActive) return;
+        app._parallaxActive = true;
+        doc.addEventListener('mousemove', function(e) {
+            var x = (e.clientX / window.parent.innerWidth - 0.5) * 2;
+            var y = (e.clientY / window.parent.innerHeight - 0.5) * 2;
+            var posX = 50 - x * 3;
+            var posY = 40 - y * 3;
+            app.style.setProperty('background-position', posX + '% ' + posY + '%', 'important');
+        });
+    })();
+    </script>
+    """, height=0)
+
+    with st.form("login_form"):
+        left_col, right_col = st.columns([1, 1])
+
+        with left_col:
+            st.markdown("""
+            <div class="login-brand-panel">
+                <h1>NorthCape</h1>
+                <div class="divider"></div>
+                <p class="subtitle">Image Library</p>
+                <p class="tagline">Premium Furniture Visuals & Assets</p>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with right_col:
+            username = st.text_input("Username", placeholder="Username")
+            password = st.text_input("Password", type="password", placeholder="Password")
+            submit = st.form_submit_button("Sign In", use_container_width=True)
+
+        if submit and username and password:
+            hashed_pw = hash_password(password)
+
+            try:
+                users_config = st.secrets.get("users", {})
+            except Exception:
+                users_config = {}
+
+            admin_users = list(users_config.get("admin_users", []))
+            admin_passwords = list(users_config.get("admin_passwords", []))
+            dealer_users = list(users_config.get("dealer_users", []))
+            dealer_passwords = list(users_config.get("dealer_passwords", []))
+
+            authenticated = False
+
+            if username in admin_users:
+                idx = admin_users.index(username)
+                if idx < len(admin_passwords) and hashed_pw == admin_passwords[idx]:
+                    st.session_state.authenticated = True
+                    st.session_state.user_role = "admin"
+                    st.session_state.username = username
+                    authenticated = True
+
+            if not authenticated and username in dealer_users:
+                idx = dealer_users.index(username)
+                if idx < len(dealer_passwords) and hashed_pw == dealer_passwords[idx]:
+                    st.session_state.authenticated = True
+                    st.session_state.user_role = "dealer"
+                    st.session_state.username = username
+                    authenticated = True
+
+            if authenticated:
+                st.rerun()
+            else:
+                st.error("Invalid username or password")
+
+        elif submit:
+            st.warning("Please enter both username and password")
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+if not check_authentication():
+    login_page()
+    st.stop()
 
 # Force Refresh Commit: Triggering Deployment Rebuild
 # Custom Styling
@@ -98,14 +525,6 @@ st.markdown("""
             right: 4px;
         }
 
-        .swap-btn {
-            width: 36px !important;
-            height: 36px !important;
-            font-size: 1.1rem;
-            bottom: 4px;
-            right: 4px;
-        }
-
         /* Compact typography for 2-column */
         .hero-title {
             font-size: 1.25rem;
@@ -160,12 +579,6 @@ st.markdown("""
             font-size: 1.3rem;
         }
 
-        .swap-btn {
-            width: 38px !important;
-            height: 38px !important;
-            font-size: 1.2rem;
-        }
-
         .hero-title {
             font-size: 1.5rem;
         }
@@ -202,10 +615,6 @@ st.markdown("""
             height: 40px !important;
         }
 
-        .swap-btn {
-            width: 36px !important;
-            height: 36px !important;
-        }
     }
 
     /* Product Card */
@@ -251,40 +660,405 @@ st.markdown("""
         transform: scale(1.25);
     }
     
-    /* Swap Image Button */
+    /* Image Container & Carousel */
     .image-container {
         position: relative;
     }
-    
-    .swap-btn {
+
+    .carousel-controls {
         position: absolute;
         bottom: 8px;
-        right: 8px;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid #e2e8f0;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0 8px;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .product-card:hover .carousel-controls {
+        opacity: 1;
+    }
+
+    .carousel-arrow {
+        background: rgba(255, 255, 255, 0.95);
+        width: 28px;
+        height: 28px;
         border-radius: 50%;
-        width: 32px;
-        height: 32px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        font-size: 1.1rem;
+        font-size: 1rem;
+        font-weight: 700;
+        color: #334155;
+        border: 1px solid #e2e8f0;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        z-index: 10;
-        transition: all 0.2s;
-        opacity: 0.6;
+        transition: all 0.15s;
+        user-select: none;
+        -webkit-user-select: none;
     }
-    
-    .swap-btn:hover {
-        opacity: 1;
+
+    .carousel-arrow:hover {
         background: white;
         transform: scale(1.1);
         border-color: #3b82f6;
+        color: #3b82f6;
     }
-    
-    .product-card:hover .swap-btn {
-        opacity: 0.9;
+
+    .image-counter {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 3px 8px;
+        border-radius: 10px;
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+    }
+
+    .carousel-dots {
+        position: absolute;
+        bottom: 42px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+        gap: 4px;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .product-card:hover .carousel-dots {
+        opacity: 1;
+    }
+
+    .carousel-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.15s;
+    }
+
+    .carousel-dot:hover {
+        transform: scale(1.3);
+    }
+
+    /* Legacy swap-btn hidden (replaced by carousel) */
+    .swap-btn {
+        display: none;
+    }
+
+    /* Slide-in Detail Panel (Google Photos style) */
+    .detail-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        width: 35vw;
+        height: 100vh;
+        background: white;
+        z-index: 99999;
+        transform: translateX(100%);
+        transition: transform 0.3s ease-out;
+        box-shadow: -8px 0 30px rgba(0, 0, 0, 0.15);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .detail-panel.active {
+        transform: translateX(0);
+    }
+
+    /* Backdrop — no blocking, just visual hint */
+    .detail-backdrop {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: none;
+        z-index: -1;
+        pointer-events: none;
+    }
+
+    .detail-backdrop.active {
+        display: block;
+    }
+
+    .detail-panel-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        width: 36px;
+        height: 36px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 50%;
+        border: 1px solid #e2e8f0;
+        font-size: 1.3rem;
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+        z-index: 10;
+        color: #64748b;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s;
+    }
+
+    .detail-panel-close:hover {
+        background: white;
+        transform: scale(1.1);
+        color: #0f172a;
+    }
+
+    /* Image section — top portion */
+    .detail-panel-image {
+        flex: 0 0 52%;
+        background: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .detail-panel-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+    }
+
+    .dp-nav {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        background: rgba(255, 255, 255, 0.95);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 1.3rem;
+        font-weight: 700;
+        color: #334155;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        transition: all 0.15s;
+        z-index: 5;
+        opacity: 0;
+    }
+
+    .detail-panel-image:hover .dp-nav {
+        opacity: 1;
+    }
+
+    .dp-nav:hover {
+        background: white;
+        transform: translateY(-50%) scale(1.1);
+        border-color: #3b82f6;
+        color: #3b82f6;
+    }
+
+    .dp-nav.prev { left: 16px; }
+    .dp-nav.next { right: 16px; }
+
+    .dp-counter {
+        position: absolute;
+        bottom: 12px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(255, 255, 255, 0.95);
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+    }
+
+    .dp-dots {
+        position: absolute;
+        bottom: 40px;
+        left: 0;
+        right: 0;
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+    }
+
+    .dp-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.15s;
+    }
+
+    .dp-dot:hover {
+        transform: scale(1.4);
+    }
+
+    /* Info section — bottom portion (no scroll on desktop) */
+    .detail-panel-info {
+        flex: 1;
+        overflow: hidden;
+        padding: 0.85rem 1.25rem;
+    }
+
+    .dp-header-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.25rem;
+    }
+
+    .dp-part-number {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0;
+        letter-spacing: -0.02em;
+    }
+
+    .dp-star-btn {
+        width: 36px;
+        height: 36px;
+        min-width: 36px;
+        border-radius: 50%;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        cursor: pointer;
+        font-size: 1.2rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.15s;
+    }
+
+    .dp-star-btn:hover {
+        background: #fef3c7;
+        border-color: #fbbf24;
+        transform: scale(1.1);
+    }
+
+    .dp-star-btn.active {
+        background: #fef3c7;
+        border-color: #fbbf24;
+    }
+
+    .dp-collection-label {
+        color: #64748b;
+        font-size: 0.8rem;
+        margin-bottom: 0.35rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .dp-badge {
+        background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+        color: #1e40af;
+        padding: 0.15rem 0.5rem;
+        border-radius: 6px;
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    .dp-divider {
+        border: none;
+        border-top: 1px solid #e2e8f0;
+        margin: 0.3rem 0;
+    }
+
+    .dp-detail-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.2rem 0;
+        font-size: 0.78rem;
+    }
+
+    .dp-detail-label {
+        color: #94a3b8;
+        font-weight: 500;
+    }
+
+    .dp-detail-value {
+        color: #334155;
+        font-weight: 600;
+        text-align: right;
+    }
+
+    .dp-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 1rem;
+    }
+
+    .dp-action-btn {
+        flex: 1;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        color: #334155;
+        font-size: 0.8rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-align: center;
+        transition: all 0.15s;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+    }
+
+    .dp-action-btn:hover {
+        background: #e2e8f0;
+        border-color: #cbd5e1;
+    }
+
+    .dp-action-btn.active {
+        background: #fef3c7;
+        border-color: #fbbf24;
+        color: #92400e;
+    }
+
+    /* Mobile: full-screen overlay */
+    @media (max-width: 768px) {
+        .detail-panel {
+            width: 100vw;
+        }
+        .detail-panel-image {
+            flex: 0 0 50%;
+        }
+        .detail-panel-info {
+            overflow-y: auto;
+        }
+        .dp-nav {
+            opacity: 1;
+        }
+        .carousel-controls {
+            opacity: 1;
+        }
+        .carousel-dots {
+            opacity: 1;
+        }
+    }
+
+    /* Tablet: slightly wider panel */
+    @media (min-width: 769px) and (max-width: 1200px) {
+        .detail-panel {
+            width: 45vw;
+        }
     }
     
     /* Shortlist Button */
@@ -483,7 +1257,7 @@ st.markdown("""
             background: #fef08a !important;
         }
 
-        .swap-btn:active {
+        .carousel-arrow:active {
             transform: scale(0.85) !important;
             background: #dbeafe !important;
         }
@@ -500,7 +1274,7 @@ st.markdown("""
         }
 
         /* Prevent double-tap zoom on buttons */
-        .shortlist-btn, .swap-btn {
+        .shortlist-btn, .carousel-arrow, .carousel-dot {
             touch-action: manipulation;
             -webkit-user-select: none;
             user-select: none;
@@ -675,9 +1449,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Data Loading with Caching
+# Data Loading with Caching - Auto busts when file changes
 @st.cache_data
-def load_catalogue_data():
+def load_catalogue_data(file_mtime):
     # Use absolute path relative to this script's directory
     base_dir = os.path.dirname(os.path.abspath(__file__))
     json_path = os.path.join(base_dir, "data", "catalogue.json")
@@ -688,7 +1462,10 @@ def load_catalogue_data():
     print(f"Warning: Data file not found at {json_path}")
     return []
 
-data = load_catalogue_data()
+base_dir = os.path.dirname(os.path.abspath(__file__))
+json_path = os.path.join(base_dir, "data", "catalogue.json")
+mtime = os.path.getmtime(json_path) if os.path.exists(json_path) else 0
+data = load_catalogue_data(mtime)
 
 # --- Shortlist Session State ---
 if 'shortlist' not in st.session_state:
@@ -723,14 +1500,14 @@ sync_val = st.text_input("sync_bridge", placeholder="sync_bridge_v7", key=sync_k
 
 if sync_val and "|" in sync_val:
     try:
-        part = sync_val.split("|")[0]
-        if part in st.session_state.shortlist:
-            st.session_state.shortlist.remove(part)
-            st.toast(f"Removed from shortlist: {part}", icon="🗑️")
-        else:
-            st.session_state.shortlist.add(part)
-            st.toast(f"Added to shortlist: {part}", icon="⭐")
-        
+        parts_str = sync_val.split("|")[0]
+        parts = [p.strip() for p in parts_str.split(",") if p.strip()]
+        for part in parts:
+            if part in st.session_state.shortlist:
+                st.session_state.shortlist.remove(part)
+            else:
+                st.session_state.shortlist.add(part)
+
         # Increment counter to ROTATE KEY for next time (handled by Streamlit's natural rerun)
         st.session_state.sync_counter += 1
     except Exception:
@@ -738,21 +1515,38 @@ if sync_val and "|" in sync_val:
 
 # Sidebar - Filtering
 st.sidebar.title("")
-all_channels = ["Northcape", "Overstock", "Wayfair", "Home Depot"]
 
-# Channel selection: checkbox for All, multiselect for specific channels
-show_all = st.sidebar.checkbox("All Channels", value=True, key="all_channels_toggle")
+user_role = get_user_role()
 
-if show_all:
-    selected_channels = ["All"]
-else:
-    selected_channels = st.sidebar.multiselect("CHANNEL", all_channels, default=[all_channels[0]])
-    if len(selected_channels) > 1:
-        channel_logic = st.sidebar.radio("Match", ["OR - any selected channel", "AND - all selected channels"], horizontal=True, key="channel_logic")
-    else:
-        channel_logic = "OR — any selected channel"
-
+# Logout button and user info at top of sidebar
+st.sidebar.caption(f"Logged in as: **{st.session_state.get('username', '')}** ({user_role})")
+if st.sidebar.button("Logout", use_container_width=True):
+    for key in ['authenticated', 'user_role', 'username']:
+        st.session_state.pop(key, None)
+    # Clear all global flags on logout
+    components.html("<script>window.parent._nc_handlers = null; window.parent._shortlistQueue = [];</script>", height=0)
+    st.rerun()
 st.sidebar.divider()
+
+# Channel selection: role-based
+if user_role == "dealer":
+    # Dealers only see North Cape products - no channel selector shown
+    selected_channels = ["Northcape"]
+    channel_logic = "OR"
+else:
+    all_channels = ["Northcape", "Overstock", "Wayfair", "Home Depot"]
+    show_all = st.sidebar.checkbox("All Channels", value=True, key="all_channels_toggle")
+
+    if show_all:
+        selected_channels = ["All"]
+    else:
+        selected_channels = st.sidebar.multiselect("CHANNEL", all_channels, default=[all_channels[0]])
+        if len(selected_channels) > 1:
+            channel_logic = st.sidebar.radio("Match", ["OR - any selected channel", "AND - all selected channels"], horizontal=True, key="channel_logic")
+        else:
+            channel_logic = "OR"
+
+    st.sidebar.divider()
 
 # Cascaded Filter Logic (Turbo Speed)
 def get_options(column, filtered_df):
@@ -785,6 +1579,11 @@ if "All" not in selected_channels and selected_channels:
             else:
                 channel_mask = channel_mask | (df[count_col] > 0)
     df = df[channel_mask]
+
+# Dealer restriction: ensure only NC products visible
+if user_role == "dealer":
+    df["NC Image Count"] = pd.to_numeric(df["NC Image Count"], errors='coerce').fillna(0)
+    df = df[df["NC Image Count"] > 0]
 
 # Safety check for empty data or missing columns
 if df.empty or "Collection Type" not in df.columns:
@@ -862,14 +1661,14 @@ if st.sidebar.button("Clear All", use_container_width=True):
 if len(st.session_state.shortlist) > 0:
     st.sidebar.divider()
     st.sidebar.markdown("### 📥 Export Shortlist")
-    export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "CSV", "PDF Gallery", "Text Summary"])
-    
+    export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "PDF Gallery"])
+
     shortlist_data = df[df["Part Number"].isin(st.session_state.shortlist)]
-    
+
     # Reorder columns as requested by user
     cols = shortlist_data.columns.tolist()
     ordered_cols = []
-    
+
     # Simple prioritized list for the first few columns
     # We want: Part Number, Collection, Arm/Table-Top, Product, Panel, Color, Type...
     priority = ["Part Number", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
@@ -877,18 +1676,12 @@ if len(st.session_state.shortlist) > 0:
         if p in cols:
             ordered_cols.append(p)
             cols.remove(p)
-    
+
     # Add remaining columns
     ordered_cols.extend(cols)
     shortlist_data = shortlist_data[ordered_cols]
-    
-    if export_format == "CSV":
-        csv_data = shortlist_data.to_csv(index=False).encode('utf-8')
-        st.sidebar.download_button("Download CSV", data=csv_data, file_name="NC_Shortlist.csv", mime="text/csv")
-    elif export_format == "Text Summary":
-        txt_data = "\n".join(shortlist_data["Part Number"].tolist())
-        st.sidebar.download_button("Download Text", data=txt_data, file_name="NC_Shortlist.txt", mime="text/plain")
-    elif export_format == "Excel (.xlsx)":
+
+    if export_format == "Excel (.xlsx)":
         # Note: Requires openpyxl
         try:
             import io
@@ -1028,6 +1821,66 @@ if len(st.session_state.shortlist) > 0:
                 st.toast("PDF Preview Generated Below!", icon="📄")
         except Exception as e:
             st.sidebar.error(f"PDF Error: {str(e)}")
+
+# --- Upload Excel: Enrich Part Numbers with Catalogue Data ---
+st.sidebar.divider()
+st.sidebar.markdown("### 📤 Upload Part Numbers")
+uploaded_file = st.sidebar.file_uploader(
+    "Upload Excel with Part Numbers in the first column",
+    type=["xlsx"],
+    key="part_upload",
+    label_visibility="collapsed"
+)
+
+if uploaded_file is not None:
+    try:
+        import io as _io
+        uploaded_df = pd.read_excel(uploaded_file, engine='openpyxl')
+
+        if uploaded_df.empty or uploaded_df.shape[1] == 0:
+            st.sidebar.error("Uploaded file is empty.")
+        else:
+            # Read part numbers from first column (whatever the header is)
+            first_col_name = uploaded_df.columns[0]
+            part_numbers = uploaded_df[first_col_name].dropna().astype(str).str.strip().tolist()
+
+            # Match against catalogue
+            matched = df[df["Part Number"].isin(part_numbers)]
+
+            # Reorder columns with priority
+            cols = matched.columns.tolist()
+            ordered = []
+            prio = ["Part Number", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
+            for p in prio:
+                if p in cols:
+                    ordered.append(p)
+                    cols.remove(p)
+            ordered.extend(cols)
+            matched = matched[ordered]
+
+            found = len(matched)
+            not_found = [pn for pn in part_numbers if pn not in matched["Part Number"].values]
+
+            st.sidebar.success(f"Matched **{found}** of {len(part_numbers)} part numbers")
+            if not_found:
+                with st.sidebar.expander(f"{len(not_found)} not found"):
+                    st.sidebar.caption("\n".join(not_found[:50]))
+                    if len(not_found) > 50:
+                        st.sidebar.caption(f"...and {len(not_found) - 50} more")
+
+            if found > 0:
+                output_buf = _io.BytesIO()
+                with pd.ExcelWriter(output_buf, engine='openpyxl') as writer:
+                    matched.to_excel(writer, index=False, sheet_name="Enriched Data")
+                st.sidebar.download_button(
+                    f"Download Enriched Excel ({found} items)",
+                    data=output_buf.getvalue(),
+                    file_name="NC_Enriched_Data.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+    except Exception as e:
+        st.sidebar.error(f"Upload Error: {str(e)}")
 
 # Main Content - Premium Header
 st.markdown("""
@@ -1212,9 +2065,9 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     if not image_list and item.get("Local_Thumbnail"):
         image_list = [item["Local_Thumbnail"]]
         
-    # Get base64 for the top 3 images for instant swapping
+    # Get base64 for all available images (up to 5)
     b64_images = []
-    for thumb_path in image_list[:3]:
+    for thumb_path in image_list[:5]:
         b64 = get_base64_img(thumb_path)
         if b64: b64_images.append(b64)
     
@@ -1259,36 +2112,52 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         final_val = val
         if label == "Color" and pd.notna(item.get('Color_Link')):
              final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
+        
+        # Clean specific labels: only keep what's after the first '-'
+        if label.lower() in ["arm/table-top", "arm/table top", "panel"] and "-" in str(val):
+            final_val = str(val).split("-", 1)[1].strip()
+            
         return f'<div class="detail-row"><span class="detail-label">{label}</span><span class="detail-value">{final_val}</span></div>'
 
-    # Image Count Badges Logic
+    # Image Count Badges Logic (dealers only see NC)
     image_stats_html = ""
-    for label, col in [("NC", "NC Image Count"), ("BY", "BY Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]:
+    badge_channels = [("NC", "NC Image Count")] if user_role == "dealer" else [("NC", "NC Image Count"), ("BY", "BY Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]
+    for label, col in badge_channels:
         count = item.get(col, 0)
         if pd.notna(count) and count > 0:
             image_stats_html += f'<div class="detail-row"><span class="detail-label">{label} Images</span><span class="detail-value">{int(count)}</span></div>'
 
-    # Swap Button HTML (only if more than 1 image)
-    swap_html = ""
+    # Carousel HTML (only if more than 1 image)
+    carousel_html = ""
     if len(b64_images) > 1:
-        # Use a data-target and explicit pointer-events for reliability
-        swap_html = f'<div class="swap-btn" data-swap-target="img-{i}" title="Next Image" style="cursor: pointer; pointer-events: auto;">🔄</div>'
+        dots_html = "".join([
+            f'<div class="carousel-dot" data-target="img-{i}" data-idx="{idx}" style="background: {"#3b82f6" if idx == 0 else "#cbd5e1"};"></div>'
+            for idx in range(len(b64_images))
+        ])
+        carousel_html = (
+            f'<div class="carousel-dots">{dots_html}</div>'
+            f'<div class="carousel-controls">'
+                f'<div class="carousel-arrow carousel-prev" data-target="img-{i}">&#8249;</div>'
+                f'<div class="image-counter" id="counter-{i}">1/{len(b64_images)}</div>'
+                f'<div class="carousel-arrow carousel-next" data-target="img-{i}">&#8250;</div>'
+            f'</div>'
+        )
 
     # Build detail rows for fields
     detail_rows_html = "".join([row_html(lbl, v) for lbl, v in display_fields])
 
-    # Build card HTML with unique ID for image and data-urls for swapping
+    # Build card HTML with unique ID for image and data-urls for carousel
     card_html = (
         f'<div class="product-card" style="position: relative;">'
             f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Shortlist">{shortlist_icon}</div>'
             f'<div class="card-header">'
-                f'<div class="badge">{item["Collection Type"]}</div>'
+                f'<div class="badge">{item["Type"]}</div>'
                 f'<div class="part-number">{item["Part Number"]}</div>'
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
-                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0">'
-                f'{swap_html}'
+                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0" data-total="{len(b64_images)}" style="cursor: pointer;">'
+                f'{carousel_html}'
             f'</div>'
             f'<div class="card-footer">'
                 f'{detail_rows_html}'
@@ -1302,103 +2171,332 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
 grid_html += '</div>'
 
-# 1. Inject the Grid HTML
-st.markdown(grid_html, unsafe_allow_html=True)
+# Slide-in Detail Panel HTML
+detail_panel_html = """
+<div class="detail-backdrop" id="detail-backdrop"></div>
+<div class="detail-panel" id="detail-panel">
+    <div class="detail-panel-close" id="detail-panel-close">&times;</div>
+    <div class="detail-panel-image">
+        <div class="dp-nav prev" id="dp-prev">&#8249;</div>
+        <img id="dp-img" src="" alt="Product Detail">
+        <div class="dp-nav next" id="dp-next">&#8250;</div>
+        <div class="dp-dots" id="dp-dots"></div>
+        <div class="dp-counter" id="dp-counter"></div>
+    </div>
+    <div class="detail-panel-info" id="dp-info"></div>
+</div>
+"""
 
-# 2. Inject the Image Swapper Script
-# This uses an iframe-to-parent hack to bypass sanitization
-# It attaches a capture-phase listener to the parent document
-js_swap_html = """
+# 1. Inject the Grid HTML + Detail Panel
+st.markdown(grid_html + detail_panel_html, unsafe_allow_html=True)
+
+# 2. Inject Carousel + Detail Panel + Shortlist Script
+js_html = """
 <script>
 (function() {
-    const parentDoc = window.parent.document;
-    
-    // 1. Image Swapper Handler
-    const handler = function(e) {
-        const btn = e.target.closest('.swap-btn');
-        if (!btn) return;
-        
-        e.preventDefault();
-        e.stopPropagation();
-        
-        const targetId = btn.getAttribute('data-swap-target');
-        const img = parentDoc.getElementById(targetId);
-        if (!img) return;
-        
+    var parentDoc = window.parent.document;
+
+    // --- CLEANUP OLD HANDLERS (prevents duplicates & stale listeners) ---
+    if (window.parent._nc_handlers) {
+        var old = window.parent._nc_handlers;
+        parentDoc.removeEventListener('click', old.carousel, true);
+        parentDoc.removeEventListener('click', old.dot, true);
+        parentDoc.removeEventListener('click', old.panelOpen, true);
+        parentDoc.removeEventListener('click', old.panelControl, true);
+        parentDoc.removeEventListener('click', old.shortlist, true);
+        parentDoc.removeEventListener('keydown', old.keyboard);
+        parentDoc.removeEventListener('touchstart', old.carousel, true);
+        parentDoc.removeEventListener('touchstart', old.dot, true);
+        parentDoc.removeEventListener('touchstart', old.shortlist, true);
+    }
+
+    // --- Shortlist queue (persists across reruns) ---
+    if (!window.parent._shortlistQueue) window.parent._shortlistQueue = [];
+
+    function flushShortlist() {
+        var queue = window.parent._shortlistQueue;
+        if (!queue || queue.length === 0) return;
+        var targetInput = parentDoc.querySelector('input[placeholder="sync_bridge_v7"]');
+        if (!targetInput) return;
+
+        var syncValue = queue.join(',') + '|' + Date.now();
+        window.parent._shortlistQueue = [];
+
+        targetInput.focus();
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(targetInput, syncValue);
+        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+        targetInput.dispatchEvent(new KeyboardEvent('keydown', {
+            bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
+        }));
+        targetInput.blur();
+    }
+
+    function queueShortlist(part) {
+        // XOR: if already queued (toggled back), remove it; otherwise add
+        var q = window.parent._shortlistQueue;
+        var idx = q.indexOf(part);
+        if (idx > -1) { q.splice(idx, 1); } else { q.push(part); }
+
+        // Debounce: flush after 700ms of no activity
+        clearTimeout(window.parent._shortlistTimer);
+        window.parent._shortlistTimer = setTimeout(flushShortlist, 700);
+    }
+
+    // --- Helper: navigate image on a card ---
+    function navigateCard(img, newIdx) {
         try {
-            const b64Data = img.getAttribute('data-urls-b64');
-            const urls = JSON.parse(atob(b64Data));
+            var b64Data = img.getAttribute('data-urls-b64');
+            var urls = JSON.parse(atob(b64Data));
             if (!urls || urls.length < 2) return;
-            
-            let idx = parseInt(img.getAttribute('data-idx')) || 0;
-            idx = (idx + 1) % urls.length;
-            
+
+            var idx = ((newIdx % urls.length) + urls.length) % urls.length;
             img.src = urls[idx];
             img.setAttribute('data-idx', idx);
-        } catch (err) {
-            console.error("Swap Error:", err);
-        }
-    };
-    
-    // 2. Shortlist Toggle Handler (V7 - Event Aggression)
-    const shortlistHandler = function(e) {
-        const btn = e.target.closest('.shortlist-btn');
-        if (!btn) return;
-        
-        const part = btn.getAttribute('data-part');
-        console.log("NC Checklist: Star Toggled for", part);
-        
-        // Find input by unique placeholder
-        let targetInput = parentDoc.querySelector('input[placeholder="sync_bridge_v7"]');
-        
-        if (targetInput) {
-            btn.style.backgroundColor = '#fef08a'; // Immediate feedback
-            btn.style.transform = 'scale(0.8)';
-            
-            const syncValue = part + "|" + Date.now();
-            
-            // 1. Focus the input
-            targetInput.focus();
-            
-            // 2. Set value via native setter (React compliance)
-            const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-            setter.call(targetInput, syncValue);
-            
-            // 3. Dispatch events to trigger change detection
-            targetInput.dispatchEvent(new Event('input', { bubbles: true }));
-            targetInput.dispatchEvent(new Event('change', { bubbles: true }));
-            
-            // 4. Force submit via Enter key
-            const enterEv = new KeyboardEvent('keydown', {
-                bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
-            });
-            targetInput.dispatchEvent(enterEv);
-            
-            // 5. Blur to finalize
-            targetInput.blur();
-            
-            console.log("NC Checklist: V7 Bridge Sent Toggle Signal");
-            
-            setTimeout(() => {
-                btn.style.backgroundColor = '';
-                btn.style.transform = '';
-            }, 500);
-        } else {
-            console.error("NC Checklist Error: V7 Sync Input not found in DOM");
-        }
-    };
-    
-    // 3. Persistent Connection via V7 Flag
-    if (parentDoc._nc_v7_active) return;
-    parentDoc._nc_v7_active = true;
 
-    parentDoc.addEventListener('click', handler, true);
+            var imgId = img.id;
+            var num = imgId.replace('img-', '');
+            var counter = parentDoc.getElementById('counter-' + num);
+            if (counter) counter.textContent = (idx + 1) + '/' + urls.length;
+
+            var dots = parentDoc.querySelectorAll('.carousel-dot[data-target="' + imgId + '"]');
+            dots.forEach(function(dot, i) {
+                dot.style.background = i === idx ? '#3b82f6' : '#cbd5e1';
+            });
+        } catch (err) { /* ignore */ }
+    }
+
+    // --- 1. Carousel Arrow Handler ---
+    var carouselHandler = function(e) {
+        var arrow = e.target.closest('.carousel-arrow');
+        if (!arrow) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var targetId = arrow.getAttribute('data-target');
+        var img = parentDoc.getElementById(targetId);
+        if (!img) return;
+        var idx = parseInt(img.getAttribute('data-idx')) || 0;
+        navigateCard(img, arrow.classList.contains('carousel-prev') ? idx - 1 : idx + 1);
+    };
+
+    // --- 2. Dot Click Handler ---
+    var dotHandler = function(e) {
+        var dot = e.target.closest('.carousel-dot');
+        if (!dot) return;
+        e.preventDefault();
+        e.stopPropagation();
+        var img = parentDoc.getElementById(dot.getAttribute('data-target'));
+        if (img) navigateCard(img, parseInt(dot.getAttribute('data-idx')));
+    };
+
+    // --- 3. Slide-in Detail Panel ---
+    var panelUrls = [];
+    var panelIdx = 0;
+
+    function updatePanelDots() {
+        var c = parentDoc.getElementById('dp-dots');
+        if (!c) return;
+        var h = '';
+        for (var i = 0; i < panelUrls.length; i++) {
+            h += '<div class="dp-dot" data-dp-idx="' + i + '" style="background:' + (i === panelIdx ? '#3b82f6' : '#cbd5e1') + ';"></div>';
+        }
+        c.innerHTML = h;
+    }
+
+    function updatePanelImage() {
+        var dpImg = parentDoc.getElementById('dp-img');
+        var dpCounter = parentDoc.getElementById('dp-counter');
+        if (dpImg) dpImg.src = panelUrls[panelIdx];
+        if (dpCounter) dpCounter.textContent = (panelIdx + 1) + '/' + panelUrls.length;
+        updatePanelDots();
+    }
+
+    function openPanel(img) {
+        try {
+            panelUrls = JSON.parse(atob(img.getAttribute('data-urls-b64')));
+            panelIdx = parseInt(img.getAttribute('data-idx')) || 0;
+        } catch (err) {
+            panelUrls = [img.src];
+            panelIdx = 0;
+        }
+
+        var panel = parentDoc.getElementById('detail-panel');
+        var backdrop = parentDoc.getElementById('detail-backdrop');
+        var dpImg = parentDoc.getElementById('dp-img');
+        var dpInfo = parentDoc.getElementById('dp-info');
+        if (!panel || !dpImg) return;
+
+        dpImg.src = panelUrls[panelIdx];
+        updatePanelDots();
+        var dpCounter = parentDoc.getElementById('dp-counter');
+        if (dpCounter) dpCounter.textContent = (panelIdx + 1) + '/' + panelUrls.length;
+
+        var card = img.closest('.product-card');
+        if (card && dpInfo) {
+            var partNum = card.querySelector('.part-number');
+            var collection = card.querySelector('.collection-text');
+            var badge = card.querySelector('.badge');
+            var shortlistBtn = card.querySelector('.shortlist-btn');
+            var isShortlisted = shortlistBtn && shortlistBtn.classList.contains('active');
+            var partValue = shortlistBtn ? shortlistBtn.getAttribute('data-part') : '';
+
+            var rows = card.querySelectorAll('.card-footer .detail-row');
+            var rowsHtml = '';
+            rows.forEach(function(row) {
+                var label = row.querySelector('.detail-label');
+                var value = row.querySelector('.detail-value');
+                if (label && value) {
+                    rowsHtml += '<div class="dp-detail-row"><span class="dp-detail-label">' + label.innerHTML + '</span><span class="dp-detail-value">' + value.innerHTML + '</span></div>';
+                }
+            });
+
+            dpInfo.innerHTML =
+                '<div class="dp-header-row">' +
+                    '<div class="dp-part-number">' + (partNum ? partNum.textContent : '') + '</div>' +
+                    '<div class="dp-star-btn ' + (isShortlisted ? 'active' : '') + '" id="dp-shortlist-btn" data-part="' + partValue + '">' +
+                        (isShortlisted ? '&#11088;' : '&#9734;') +
+                    '</div>' +
+                '</div>' +
+                '<div class="dp-collection-label">' +
+                    '<span class="dp-badge">' + (badge ? badge.textContent : '') + '</span> ' +
+                    (collection ? collection.textContent : '') +
+                '</div>' +
+                '<hr class="dp-divider">' +
+                rowsHtml;
+        }
+
+        panel.classList.add('active');
+        if (backdrop) backdrop.classList.add('active');
+
+        if (window.innerWidth > 768) {
+            var collapseBtn = parentDoc.querySelector('[data-testid="stSidebarCollapseButton"] button, [data-testid="collapsedControl"] button');
+            var sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
+            if (sidebar && sidebar.getAttribute('aria-expanded') === 'true' && collapseBtn) {
+                collapseBtn.click();
+            }
+        }
+    }
+
+    function closePanel() {
+        var panel = parentDoc.getElementById('detail-panel');
+        var backdrop = parentDoc.getElementById('detail-backdrop');
+        if (panel) panel.classList.remove('active');
+        if (backdrop) backdrop.classList.remove('active');
+    }
+
+    function panelNavigate(dir) {
+        if (panelUrls.length < 2) return;
+        panelIdx = ((panelIdx + dir) % panelUrls.length + panelUrls.length) % panelUrls.length;
+        updatePanelImage();
+    }
+
+    var panelOpenHandler = function(e) {
+        if (e.target.closest('.carousel-arrow') || e.target.closest('.carousel-dot') ||
+            e.target.closest('.shortlist-btn') || e.target.closest('.detail-panel') ||
+            e.target.closest('.detail-backdrop')) return;
+        var img = e.target.closest('.image-container img');
+        if (!img) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openPanel(img);
+    };
+
+    var panelControlHandler = function(e) {
+        if (e.target.closest('#detail-panel-close')) { closePanel(); return; }
+
+        var prevBtn = e.target.closest('#dp-prev');
+        if (prevBtn) { e.stopPropagation(); panelNavigate(-1); return; }
+        var nextBtn = e.target.closest('#dp-next');
+        if (nextBtn) { e.stopPropagation(); panelNavigate(1); return; }
+
+        var dpDot = e.target.closest('.dp-dot');
+        if (dpDot) {
+            e.stopPropagation();
+            var idx = parseInt(dpDot.getAttribute('data-dp-idx'));
+            if (!isNaN(idx) && idx >= 0 && idx < panelUrls.length) {
+                panelIdx = idx;
+                updatePanelImage();
+            }
+            return;
+        }
+
+        // Shortlist button in panel — uses same queue
+        var dpShortlist = e.target.closest('#dp-shortlist-btn');
+        if (dpShortlist) {
+            e.stopPropagation();
+            e.preventDefault();
+            var part = dpShortlist.getAttribute('data-part');
+            if (part) {
+                dpShortlist.classList.toggle('active');
+                dpShortlist.innerHTML = dpShortlist.classList.contains('active') ? '&#11088;' : '&#9734;';
+                // Also toggle the card's star
+                var cardBtn = parentDoc.querySelector('.shortlist-btn[data-part="' + part + '"]');
+                if (cardBtn) {
+                    cardBtn.classList.toggle('active');
+                    cardBtn.innerHTML = cardBtn.classList.contains('active') ? '⭐' : '☆';
+                }
+                queueShortlist(part);
+            }
+            return;
+        }
+
+        if (e.target.id === 'detail-backdrop') { closePanel(); }
+    };
+
+    var keyboardHandler = function(e) {
+        var panel = parentDoc.getElementById('detail-panel');
+        if (!panel || !panel.classList.contains('active')) return;
+        if (e.key === 'Escape') closePanel();
+        if (e.key === 'ArrowLeft') panelNavigate(-1);
+        if (e.key === 'ArrowRight') panelNavigate(1);
+    };
+
+    // --- 4. Shortlist Toggle (card grid) — instant visual + debounced sync ---
+    var shortlistHandler = function(e) {
+        var btn = e.target.closest('.shortlist-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        var part = btn.getAttribute('data-part');
+        if (!part) return;
+
+        // Immediate visual toggle
+        btn.classList.toggle('active');
+        btn.innerHTML = btn.classList.contains('active') ? '⭐' : '☆';
+
+        // Pulse animation
+        btn.style.transform = 'scale(0.8)';
+        setTimeout(function() { btn.style.transform = ''; }, 200);
+
+        // Queue for batch sync (debounced 700ms)
+        queueShortlist(part);
+    };
+
+    // --- Register all handlers (capture phase) ---
+    parentDoc.addEventListener('click', carouselHandler, true);
+    parentDoc.addEventListener('click', dotHandler, true);
+    parentDoc.addEventListener('click', panelOpenHandler, true);
+    parentDoc.addEventListener('click', panelControlHandler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
-    // Add touch events for instant mobile response (no 300ms delay)
-    parentDoc.addEventListener('touchstart', handler, true);
+    parentDoc.addEventListener('keydown', keyboardHandler);
+    parentDoc.addEventListener('touchstart', carouselHandler, true);
+    parentDoc.addEventListener('touchstart', dotHandler, true);
     parentDoc.addEventListener('touchstart', shortlistHandler, true);
-    console.log("NC Checklist: V7 Listeners Active");
+
+    // Store references for cleanup on next rerun
+    window.parent._nc_handlers = {
+        carousel: carouselHandler,
+        dot: dotHandler,
+        panelOpen: panelOpenHandler,
+        panelControl: panelControlHandler,
+        shortlist: shortlistHandler,
+        keyboard: keyboardHandler
+    };
+
+    console.log('NC Catalogue: V10 Listeners Active');
 })();
 </script>
 """
-components.html(js_swap_html, height=0)
+components.html(js_html, height=0)
