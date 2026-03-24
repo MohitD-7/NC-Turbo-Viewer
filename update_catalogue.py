@@ -41,6 +41,35 @@ for f in all_excel:
 
 JSON_OUTPUT = os.path.join(DATA_DIR, "catalogue.json")
 
+# Product names that should NOT appear in the Color dropdown
+# These are furniture product types, not fabric colors
+PRODUCT_NAME_BLACKLIST = {
+    # Seating sizes
+    "2 Seater - 33",
+    "2 Seater - 41",
+    "4 Seater - 41",
+    "6 Seater - 72",
+    "8 Seater - 83",
+    # Tables
+    "Coffee Table",
+    "Coffee Table - Rectangle",
+    "Coffee Table - Square",
+    "Corner End Table",
+    "End Table",
+    "End Table (Nesting Table)",
+    "Side Table",
+    # Dining
+    "Dining Chair",
+    "Dining Table 33",
+    "Dining Table 41",
+    "Dining Table 72",
+    "Dining Table 83",
+    "Dining Table Set 33",
+    "Dining Table Set 41",
+    "Dining Table Set 72",
+    "Dining Table Set 83",
+}
+
 def extract_link(formula):
     if not isinstance(formula, str) or not formula.startswith("="):
         return None
@@ -152,9 +181,17 @@ def update_catalogue():
                     if header == "Cushion Color": norm_header = "Color"
                     
                     if norm_header in ["Color", "Part Number"]:
-                        row_data[norm_header] = get_value_from_formula(val)
-                        link = extract_link(val)
-                        if link: row_data[f"{norm_header}_Link"] = link
+                        extracted_value = get_value_from_formula(val)
+
+                        # Special handling for Color field: filter out product names
+                        if norm_header == "Color" and extracted_value in PRODUCT_NAME_BLACKLIST:
+                            # This is a product name, not a color - clear it
+                            row_data[norm_header] = ""
+                            # Don't add the link either since it's not a color link
+                        else:
+                            row_data[norm_header] = extracted_value
+                            link = extract_link(val)
+                            if link: row_data[f"{norm_header}_Link"] = link
                     elif norm_header == "Type":
                         # Normalize Cushions (plural) to Cushion (singular)
                         val_str = str(val) if val else ""
