@@ -1518,7 +1518,9 @@ st.sidebar.title("")
 
 user_role = get_user_role()
 
-# Logout button and user info moved to main content
+# Added back per user request
+st.sidebar.markdown(f"<div style='color: #0f172a; font-weight: 700; font-size: 1.15rem; padding-bottom: 2px;'>Hi, {st.session_state.get('username', '')}</div>", unsafe_allow_html=True)
+
 st.sidebar.divider()
 
 # Channel selection: role-based
@@ -1586,17 +1588,16 @@ if df.empty or "Collection Type" not in df.columns:
         st.write("Columns found:", df.columns.tolist())
     st.stop()
 
-# Filtering State
 # Dynamic Type options based on data
 type_options = get_options("Type", df)
-selected_types = st.sidebar.multiselect("Type", type_options[1:], help="Select multiple product types") # Skip "All" for multiselect
+selected_types = st.sidebar.multiselect("Category", type_options[1:], help="Select multiple product categories") # Skip "All" for multiselect
 filtered_df = df[df["Type"].isin(selected_types)] if selected_types else df
 
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
 # Series dropdown removed as requested by the client
 
 collection_options = get_options("Collection", filtered_df)
-selected_collections = st.sidebar.multiselect("Collection", collection_options[1:], help="Select multiple collections")
+selected_collections = st.sidebar.multiselect("Collections", collection_options[1:], help="Select multiple collections")
 if selected_collections:
     filtered_df = filtered_df[filtered_df["Collection"].isin(selected_collections)]
 
@@ -1873,22 +1874,63 @@ if uploaded_file is not None:
         st.sidebar.error(f"Upload Error: {str(e)}")
 
 # Main Content - Premium Header
-header_col1, header_col2 = st.columns([3, 1])
+# Anchor to target the exact columns block
+# Header styling is now fully handled dynamically via JavaScript below to ensure compatibility
+# across all Streamlit container rendering updates.
+
+# Add anchor for Back to Top button
+st.markdown('<div id="top-anchor"></div>', unsafe_allow_html=True)
+
+header_col1, header_col2 = st.columns([4, 1])
 with header_col1:
     st.markdown("""
-    <div class="hero-container">
-        <div class="hero-title">NorthCape Image Library</div>
+    <div class="hero-container" style="padding: 0 !important; margin: 0 !important; display: flex; align-items: center;">
+        <div class="hero-title" style="margin: 0 !important; line-height: 1.1;">NorthCape Image Library</div>
     </div>
     """, unsafe_allow_html=True)
 with header_col2:
-    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
-    st.caption(f"Logged in as: **{st.session_state.get('username', '')}** ({user_role})")
-    if st.button("Logout", use_container_width=True):
+    if st.button("Logout"):
         for key in ['authenticated', 'user_role', 'username']:
             st.session_state.pop(key, None)
-        components.html("<script>window.parent._nc_handlers = null; window.parent._shortlistQueue = [];</script>", height=0)
+        components.html("<script>if(window.parent._nc_header_observer) window.parent._nc_header_observer.disconnect(); window.parent._nc_handlers = null; window.parent._shortlistQueue = [];</script>", height=0)
         st.rerun()
 
+    components.html("""
+    <script>
+    (function() {
+        var pDoc = window.parent.document;
+        var applyTweaks = function() {
+            var btns = pDoc.querySelectorAll('button');
+            btns.forEach(b => {
+                if(b.innerText.includes('Logout') && !b.classList.contains('nc-btn-styled')) {
+                    b.classList.add('nc-btn-styled');
+                    b.style.cssText = "border: 1px solid #3b82f6 !important; border-radius: 50px !important; color: #1e40af !important; background-color: transparent !important; padding: 0 16px !important; height: 32px !important; min-height: 32px !important; width: auto !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-weight: 600 !important; font-size: 0.8rem !important; transition: all 0.2s !important;";
+                    b.onmouseover = function() { b.style.backgroundColor='#eff6ff'; b.style.borderColor='#1e40af'; };
+                    b.onmouseout = function() { b.style.backgroundColor='transparent'; b.style.borderColor='#3b82f6'; };
+                    if(b.parentElement) {
+                        b.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
+                        if(b.parentElement.parentElement) b.parentElement.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
+                    }
+                }
+            });
+            var titles = pDoc.querySelectorAll('.hero-title');
+            titles.forEach(t => {
+                var row = t.closest('div[data-testid="stHorizontalBlock"]');
+                if (row && !row.classList.contains('nc-row-aligned')) {
+                    row.classList.add('nc-row-aligned');
+                    row.style.alignItems = 'center';
+                }
+            });
+        };
+        applyTweaks();
+        if (!window.parent._nc_header_observer) {
+            var obs = new MutationObserver(applyTweaks);
+            obs.observe(pDoc.body, { childList: true, subtree: true });
+            window.parent._nc_header_observer = obs;
+        }
+    })();
+    </script>
+    """, height=0)
 # Mobile Filter Button and Backdrop - HTML (visible in page)
 mobile_filter_html = """
 <button class="mobile-filter-btn" id="mobile-filter-button">
@@ -2015,7 +2057,7 @@ mobile_filter_js = """
 components.html(mobile_filter_js, height=0)
 
 # Search Bar (Match Reference)
-search_query = st.text_input("Search Catalogue", placeholder="🔍 Search Part Number, Collection, Color...", label_visibility="collapsed")
+search_query = st.text_input("Search Catalogue", placeholder="🔍 Search Part Number, Collections, Color...", label_visibility="collapsed")
 if search_query:
     q = search_query.lower()
     # Search across all relevant text-based columns
@@ -2027,8 +2069,11 @@ if search_query:
 
 st.caption(f"Showing {len(filtered_df)} records")
 
-# Pagination Logic
-items_per_page = 25 # Increased for dynamic layout (multiple of 5)
+# Pagination Logic - Dynamic based on viewport
+# Smart defaults: Show more items to fill larger screens
+# Grid auto-adjusts: 3 cols (900-1199px), 4 cols (1200-1599px), 5 cols (1600px+)
+# Default to ~3 rows worth for typical 1080p+ displays
+items_per_page = 40  # Accommodates 3-4 rows across common screen sizes (8-10 cards for 3-4 cols, 12-15 for 5 cols)
 total_pages = max(1, (len(filtered_df) - 1) // items_per_page + 1)
 
 if 'current_page' not in st.session_state:
@@ -2507,38 +2552,93 @@ js_html = """
 """
 components.html(js_html, height=0)
 
-# Bottom Center Pagination and Back to Top
-st.markdown("<br>", unsafe_allow_html=True)
-pag_col1, pag_col2, pag_col3 = st.columns([1, 1, 1])
+# Bottom Center Pagination (Modern) 
+st.markdown("<br><hr style='border: none; border-top: 1px solid #e2e8f0; margin: 10px 0 20px 0;'>", unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* Style the pagination buttons */
+div[data-testid="stHorizontalBlock"] button {
+    border-radius: 8px !important;
+    font-weight: 600 !important;
+    transition: all 0.2s !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-with pag_col2:
-    st.number_input("Page", min_value=1, max_value=total_pages, key="current_page")
+pag_container = st.container()
+with pag_container:
+    pc_left, pc_prev, pc_mid, pc_next, pc_right = st.columns([2, 1, 1.5, 1, 2])
 
-with pag_col3:
-    st.markdown("""
+    with pc_prev:
+        if st.button("⬅️ Previous", disabled=(st.session_state.current_page <= 1), use_container_width=True):
+            st.session_state.current_page -= 1
+            st.rerun()
+
+    with pc_mid:
+        st.markdown(f"<div style='text-align: center; padding-top: 8px; font-weight: 600; color: #475569;'>Page {st.session_state.current_page} of {total_pages}</div>", unsafe_allow_html=True)
+
+    with pc_next:
+        if st.button("Next ➡️", disabled=(st.session_state.current_page >= total_pages), use_container_width=True):
+            st.session_state.current_page += 1
+            st.rerun()
+
+    with pc_right:
+        # Back to Top button - aligned to extreme right (matching Logout position)
+        st.markdown("""
+        <div style="display: flex; justify-content: flex-end; align-items: center;">
+            <button id="back-to-top-btn" style="padding:8px 16px;
+                   background:white;
+                   color:#1e40af;
+                   border:2px solid #1e40af;
+                   border-radius:8px;
+                   font-size:14px;
+                   font-weight:600;
+                   cursor:pointer;
+                   box-shadow:0 2px 8px rgba(30,64,175,0.15);
+                   transition:all 0.3s;
+                   outline:none;
+                   white-space:nowrap;">
+                Back to Top
+            </button>
+        </div>
         <style>
-        .back-to-top {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0.5rem 1rem;
-            background: rgba(30, 64, 175, 0.1);
-            color: #1e40af !important;
-            text-decoration: none;
-            border-radius: 8px;
-            font-weight: 600;
-            transition: all 0.2s;
-            margin-top: 28px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-        }
-        .back-to-top:hover {
-            background: rgba(30, 64, 175, 0.2);
+        #back-to-top-btn:hover {
+            background:#1e40af !important;
+            color:white !important;
             transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(30,64,175,0.3) !important;
         }
         </style>
-        <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%;">
-            <a href="#" class="back-to-top" onclick="window.parent.scrollTo({top: 0, behavior: 'smooth'}); return false;">
-                ⬆️ Back to Top
-            </a>
-        </div>
-    """, unsafe_allow_html=True)
+        """, unsafe_allow_html=True)
+
+# Add JavaScript functionality for Back to Top button
+back_to_top_script = """
+<script>
+(function() {
+    var btn = window.parent.document.getElementById('back-to-top-btn');
+    if (btn && !btn.getAttribute('data-listener-added')) {
+        btn.setAttribute('data-listener-added', 'true');
+        btn.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            // Try to find and scroll to the anchor
+            var anchor = window.parent.document.getElementById('top-anchor');
+            if (anchor) {
+                anchor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                // Fallback: scroll the main app container
+                var app = window.parent.document.querySelector('.stApp');
+                if (app) {
+                    app.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    // Last resort
+                    window.parent.scrollTo({ top: 0, behavior: 'smooth' });
+                }
+            }
+        });
+    }
+})();
+</script>
+"""
+components.html(back_to_top_script, height=0)
