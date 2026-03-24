@@ -1518,14 +1518,7 @@ st.sidebar.title("")
 
 user_role = get_user_role()
 
-# Logout button and user info at top of sidebar
-st.sidebar.caption(f"Logged in as: **{st.session_state.get('username', '')}** ({user_role})")
-if st.sidebar.button("Logout", use_container_width=True):
-    for key in ['authenticated', 'user_role', 'username']:
-        st.session_state.pop(key, None)
-    # Clear all global flags on logout
-    components.html("<script>window.parent._nc_handlers = null; window.parent._shortlistQueue = [];</script>", height=0)
-    st.rerun()
+# Logout button and user info moved to main content
 st.sidebar.divider()
 
 # Channel selection: role-based
@@ -1600,10 +1593,7 @@ selected_types = st.sidebar.multiselect("Type", type_options[1:], help="Select m
 filtered_df = df[df["Type"].isin(selected_types)] if selected_types else df
 
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
-series_options = get_options("Collection Type", filtered_df)
-selected_series = st.sidebar.multiselect("Series", series_options[1:], help="Select multiple series")
-if selected_series:
-    filtered_df = filtered_df[filtered_df["Collection Type"].isin(selected_series)]
+# Series dropdown removed as requested by the client
 
 collection_options = get_options("Collection", filtered_df)
 selected_collections = st.sidebar.multiselect("Collection", collection_options[1:], help="Select multiple collections")
@@ -1634,20 +1624,20 @@ selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
 if selected_colors:
     filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
 
-# --- Shortlist Management ---
+# --- Favorites List Management ---
 st.sidebar.divider()
-st.sidebar.markdown(f"### ⭐ Shortlist ({len(st.session_state.shortlist)})")
+st.sidebar.markdown(f"### ⭐ Favorites List ({len(st.session_state.shortlist)})")
 
-# View Shortlist Only Toggle
-view_mode = st.sidebar.toggle("View Shortlist Only", value=st.session_state.view_shortlist)
+# View Favorites List Only Toggle
+view_mode = st.sidebar.toggle("View Favorites Only", value=st.session_state.view_shortlist)
 st.session_state.view_shortlist = view_mode
 
 if st.session_state.view_shortlist:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
 
-# Shortlist All Visible Button
+# Favorites List All Visible Button
 if not filtered_df.empty:
-    if st.sidebar.button("Shortlist All Visible", use_container_width=True):
+    if st.sidebar.button("Add All Visible to Favorites", use_container_width=True):
         visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
         st.session_state.shortlist.update(visible_parts)
         st.rerun()
@@ -1660,7 +1650,7 @@ if st.sidebar.button("Clear All", use_container_width=True):
 # --- Export Section ---
 if len(st.session_state.shortlist) > 0:
     st.sidebar.divider()
-    st.sidebar.markdown("### 📥 Export Shortlist")
+    st.sidebar.markdown("### 📥 Export Favorites List")
     export_format = st.sidebar.selectbox("Choose Format", ["Excel (.xlsx)", "PDF Gallery"])
 
     shortlist_data = df[df["Part Number"].isin(st.session_state.shortlist)]
@@ -1883,11 +1873,21 @@ if uploaded_file is not None:
         st.sidebar.error(f"Upload Error: {str(e)}")
 
 # Main Content - Premium Header
-st.markdown("""
-<div class="hero-container">
-    <div class="hero-title">NorthCape Image Library</div>
-</div>
-""", unsafe_allow_html=True)
+header_col1, header_col2 = st.columns([3, 1])
+with header_col1:
+    st.markdown("""
+    <div class="hero-container">
+        <div class="hero-title">NorthCape Image Library</div>
+    </div>
+    """, unsafe_allow_html=True)
+with header_col2:
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
+    st.caption(f"Logged in as: **{st.session_state.get('username', '')}** ({user_role})")
+    if st.button("Logout", use_container_width=True):
+        for key in ['authenticated', 'user_role', 'username']:
+            st.session_state.pop(key, None)
+        components.html("<script>window.parent._nc_handlers = null; window.parent._shortlistQueue = [];</script>", height=0)
+        st.rerun()
 
 # Mobile Filter Button and Backdrop - HTML (visible in page)
 mobile_filter_html = """
@@ -2027,11 +2027,17 @@ if search_query:
 
 st.caption(f"Showing {len(filtered_df)} records")
 
-# Pagination
+# Pagination Logic
 items_per_page = 25 # Increased for dynamic layout (multiple of 5)
 total_pages = max(1, (len(filtered_df) - 1) // items_per_page + 1)
-page = st.sidebar.number_input("Page", min_value=1, max_value=total_pages, value=1)
-start_idx = (page - 1) * items_per_page
+
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = 1
+
+if st.session_state.current_page > total_pages:
+    st.session_state.current_page = total_pages
+
+start_idx = (st.session_state.current_page - 1) * items_per_page
 end_idx = start_idx + items_per_page
 
 channel_to_prefix = {
@@ -2149,7 +2155,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     # Build card HTML with unique ID for image and data-urls for carousel
     card_html = (
         f'<div class="product-card" style="position: relative;">'
-            f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Shortlist">{shortlist_icon}</div>'
+            f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Favorites">{shortlist_icon}</div>'
             f'<div class="card-header">'
                 f'<div class="badge">{item["Type"]}</div>'
                 f'<div class="part-number">{item["Part Number"]}</div>'
@@ -2500,3 +2506,39 @@ js_html = """
 </script>
 """
 components.html(js_html, height=0)
+
+# Bottom Center Pagination and Back to Top
+st.markdown("<br>", unsafe_allow_html=True)
+pag_col1, pag_col2, pag_col3 = st.columns([1, 1, 1])
+
+with pag_col2:
+    st.number_input("Page", min_value=1, max_value=total_pages, key="current_page")
+
+with pag_col3:
+    st.markdown("""
+        <style>
+        .back-to-top {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem 1rem;
+            background: rgba(30, 64, 175, 0.1);
+            color: #1e40af !important;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s;
+            margin-top: 28px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        }
+        .back-to-top:hover {
+            background: rgba(30, 64, 175, 0.2);
+            transform: translateY(-2px);
+        }
+        </style>
+        <div style="display: flex; justify-content: flex-end; align-items: center; height: 100%;">
+            <a href="#" class="back-to-top" onclick="window.parent.scrollTo({top: 0, behavior: 'smooth'}); return false;">
+                ⬆️ Back to Top
+            </a>
+        </div>
+    """, unsafe_allow_html=True)
