@@ -183,11 +183,15 @@ def update_catalogue():
                     if norm_header in ["Color", "Part Number"]:
                         extracted_value = get_value_from_formula(val)
 
-                        # Special handling for Color field: filter out product names
+                        # Special handling for Color field: filter out product names from dropdown
                         if norm_header == "Color" and extracted_value in PRODUCT_NAME_BLACKLIST:
-                            # This is a product name, not a color - clear it
+                            # This is a product name (dining table, end table, etc.), not a fabric color
+                            # Clear the Color field so it doesn't appear in the Color dropdown
                             row_data[norm_header] = ""
-                            # Don't add the link either since it's not a color link
+                            # BUT preserve the hyperlink for the product card display
+                            # The product card will show the product name with this link
+                            link = extract_link(val)
+                            if link: row_data[f"{norm_header}_Link"] = link
                         else:
                             row_data[norm_header] = extracted_value
                             link = extract_link(val)
