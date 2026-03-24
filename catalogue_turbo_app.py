@@ -2159,15 +2159,31 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
     def row_html(label, val):
         if not val: return ""
-        # Handle special color link if it's the color row
         final_val = val
-        if label == "Color" and pd.notna(item.get('Color_Link')):
+
+        # Check if this is a blacklisted item (has Color_Link but empty Color field)
+        is_blacklisted = pd.notna(item.get('Color_Link')) and (not item.get('Color') or str(item.get('Color')).strip() == "")
+
+        # For blacklisted items: hyperlink Arm/Table-Top or Product
+        if is_blacklisted and pd.notna(item.get('Color_Link')):
+            if label == "Arm/Table-Top":
+                # Hyperlink the Arm/Table-Top value
+                final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
+            elif label == "Product" and not get_val("Arm/Table-Top"):
+                # Only hyperlink Product if there's NO Arm/Table-Top
+                final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
+
+        # For non-blacklisted items: hyperlink Color as before
+        if label == "Color" and pd.notna(item.get('Color_Link')) and item.get('Color'):
              final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
-        
+
         # Clean specific labels: only keep what's after the first '-'
         if label.lower() in ["arm/table-top", "arm/table top", "panel"] and "-" in str(val):
             final_val = str(val).split("-", 1)[1].strip()
-            
+            # Re-apply hyperlink if it was supposed to be hyperlinked
+            if is_blacklisted and label == "Arm/Table-Top" and pd.notna(item.get('Color_Link')):
+                final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{final_val}</a>'
+
         return f'<div class="detail-row"><span class="detail-label">{label}</span><span class="detail-value">{final_val}</span></div>'
 
     # Image Count Badges Logic (dealers only see NC)
