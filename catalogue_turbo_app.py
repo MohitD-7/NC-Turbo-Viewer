@@ -1380,6 +1380,23 @@ st.markdown("""
             margin: 12px auto 8px;
         }
 
+        /* Mobile: Add class-based targeting for logout buttons */
+        .header-logout-btn {
+            display: none !important;
+        }
+
+        /* Mobile: Style sidebar logout button */
+        .sidebar-logout-btn {
+            padding: 4px 12px !important;
+            font-size: 0.75rem !important;
+            min-height: 28px !important;
+            border-radius: 20px !important;
+            border: 1px solid #3b82f6 !important;
+            background-color: transparent !important;
+            color: #1e40af !important;
+            font-weight: 600 !important;
+        }
+
         /* Thinner scrollbar */
         ::-webkit-scrollbar {
             width: 4px;
@@ -1391,6 +1408,11 @@ st.markdown("""
         .mobile-filter-btn,
         .filter-modal,
         .filter-backdrop {
+            display: none !important;
+        }
+
+        /* Desktop: Hide sidebar logout button, show header logout */
+        .sidebar-logout-btn {
             display: none !important;
         }
 
@@ -1518,8 +1540,14 @@ st.sidebar.title("")
 
 user_role = get_user_role()
 
-# Added back per user request
-st.sidebar.markdown(f"<div style='color: #0f172a; font-weight: 700; font-size: 1.15rem; padding-bottom: 2px;'>Hi, {st.session_state.get('username', '')}</div>", unsafe_allow_html=True)
+# Added back per user request - with inline logout on mobile
+# Use flexbox container for perfect alignment - logout will be moved here by JS on mobile
+st.sidebar.markdown(f"""
+<div id='sidebar-user-header' style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;'>
+    <div style='color: #0f172a; font-weight: 700; font-size: 1.15rem;'>Hi, {st.session_state.get('username', '')}</div>
+    <div id='sidebar-logout-container'></div>
+</div>
+""", unsafe_allow_html=True)
 
 st.sidebar.divider()
 
@@ -1588,10 +1616,18 @@ if df.empty or "Collection Type" not in df.columns:
         st.write("Columns found:", df.columns.tolist())
     st.stop()
 
-# Dynamic Type options based on data
-type_options = get_options("Type", df)
-selected_types = st.sidebar.multiselect("Category", type_options[1:], help="Select multiple product categories") # Skip "All" for multiselect
-filtered_df = df[df["Type"].isin(selected_types)] if selected_types else df
+# Primary Category filter (Cushion, Furniture, Accent Pillow)
+category_options = get_options("Category", df)
+selected_categories = st.sidebar.multiselect("Category", category_options[1:], help="Select product categories (Cushion, Furniture, Accent Pillow)")
+filtered_df = df[df["Category"].isin(selected_categories)] if selected_categories else df
+
+# Cushion-specific Type filter (only show when Cushion category is selected)
+if selected_categories and "Cushion" in selected_categories:
+    type_options = get_options("Type", filtered_df[filtered_df["Category"] == "Cushion"])
+    if len(type_options) > 1:
+        selected_types = st.sidebar.multiselect("Cushion Type", type_options[1:], help="Select specific cushion types")
+        if selected_types:
+            filtered_df = filtered_df[filtered_df["Type"].isin(selected_types)]
 
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
 # Series dropdown removed as requested by the client
@@ -1601,18 +1637,19 @@ selected_collections = st.sidebar.multiselect("Collections", collection_options[
 if selected_collections:
     filtered_df = filtered_df[filtered_df["Collection"].isin(selected_collections)]
 
-# Furniture specific filters
-arm_opts = get_options("Arm/Table-Top", filtered_df)
-if len(arm_opts) > 1:
-    selected_arms = st.sidebar.multiselect("Arm/Table-Top", arm_opts[1:])
-    if selected_arms:
-        filtered_df = filtered_df[filtered_df["Arm/Table-Top"].isin(selected_arms)]
+# Furniture specific filters (only show when Furniture category is selected)
+if not selected_categories or "Furniture" in selected_categories:
+    arm_opts = get_options("Arm/Table-Top", filtered_df)
+    if len(arm_opts) > 1:
+        selected_arms = st.sidebar.multiselect("Arm/Table-Top", arm_opts[1:])
+        if selected_arms:
+            filtered_df = filtered_df[filtered_df["Arm/Table-Top"].isin(selected_arms)]
 
-product_opts = get_options("Product", filtered_df)
-if len(product_opts) > 1:
-    selected_products = st.sidebar.multiselect("Product", product_opts[1:])
-    if selected_products:
-        filtered_df = filtered_df[filtered_df["Product"].isin(selected_products)]
+    product_opts = get_options("Product", filtered_df)
+    if len(product_opts) > 1:
+        selected_products = st.sidebar.multiselect("Product", product_opts[1:])
+        if selected_products:
+            filtered_df = filtered_df[filtered_df["Product"].isin(selected_products)]
 
 panel_opts = get_options("Panel", filtered_df)
 if len(panel_opts) > 1:
@@ -1661,8 +1698,8 @@ if len(st.session_state.shortlist) > 0:
     ordered_cols = []
 
     # Simple prioritized list for the first few columns
-    # We want: Part Number, Collection, Arm/Table-Top, Product, Panel, Color, Type...
-    priority = ["Part Number", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
+    # We want: Part Number, Category, Collection, Arm/Table-Top, Product, Panel, Color, Type...
+    priority = ["Part Number", "Category", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
     for p in priority:
         if p in cols:
             ordered_cols.append(p)
@@ -1755,21 +1792,30 @@ if len(st.session_state.shortlist) > 0:
                 
                 # 3. Details (Conditional Ordering)
                 pdf.set_font('helvetica', '', 7)
+                category = str(item.get('Category', '')).strip()
                 st_type = str(item.get('Type', '')).strip()
                 product_val = str(item.get('Product', '')).lower()
                 is_table = 'table' in product_val
-                
-                if st_type == "Cushion":
-                    # Cushions: Type, Collection, Color
+
+                if category == "Cushion":
+                    # Cushions: Category, Type, Collection, Color
                     fields = [
+                        ("Category", item.get('Category')),
                         ("Type", item.get('Type')),
                         ("Collection", item.get('Collection')),
                         ("Color", item.get('Color'))
                     ]
-                else:
-                    # Furniture/Default: Type, Product, Arm, Panel, Color
+                elif category == "Accent Pillow":
+                    # Accent Pillows: Category, Collection, Color
                     fields = [
-                        ("Type", item.get('Type')),
+                        ("Category", item.get('Category')),
+                        ("Collection", item.get('Collection')),
+                        ("Color", item.get('Color'))
+                    ]
+                else:
+                    # Furniture/Default: Category, Product, Arm, Panel, Color
+                    fields = [
+                        ("Category", item.get('Category')),
                         ("Product", item.get('Product')),
                         ("Arm/Table-Top", item.get('Arm/Table-Top')),
                         ("Panel", item.get('Panel'))
@@ -1841,7 +1887,7 @@ if uploaded_file is not None:
             # Reorder columns with priority
             cols = matched.columns.tolist()
             ordered = []
-            prio = ["Part Number", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
+            prio = ["Part Number", "Category", "Collection", "Arm/Table-Top", "Product", "Panel", "Color", "Type"]
             for p in prio:
                 if p in cols:
                     ordered.append(p)
@@ -1899,20 +1945,26 @@ with header_col2:
     <script>
     (function() {
         var pDoc = window.parent.document;
+        var logoutBtn = null;
+        var isMobile = window.innerWidth <= 768;
+
         var applyTweaks = function() {
             var btns = pDoc.querySelectorAll('button');
             btns.forEach(b => {
                 if(b.innerText.includes('Logout') && !b.classList.contains('nc-btn-styled')) {
                     b.classList.add('nc-btn-styled');
+                    logoutBtn = b;
+
+                    // Style the button
                     b.style.cssText = "border: 1px solid #3b82f6 !important; border-radius: 50px !important; color: #1e40af !important; background-color: transparent !important; padding: 0 16px !important; height: 32px !important; min-height: 32px !important; width: auto !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-weight: 600 !important; font-size: 0.8rem !important; transition: all 0.2s !important;";
                     b.onmouseover = function() { b.style.backgroundColor='#eff6ff'; b.style.borderColor='#1e40af'; };
                     b.onmouseout = function() { b.style.backgroundColor='transparent'; b.style.borderColor='#3b82f6'; };
-                    if(b.parentElement) {
-                        b.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
-                        if(b.parentElement.parentElement) b.parentElement.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
-                    }
+
+                    // Move to sidebar on mobile, keep in header on desktop
+                    repositionLogout();
                 }
             });
+
             var titles = pDoc.querySelectorAll('.hero-title');
             titles.forEach(t => {
                 var row = t.closest('div[data-testid="stHorizontalBlock"]');
@@ -1922,7 +1974,67 @@ with header_col2:
                 }
             });
         };
+
+        var repositionLogout = function() {
+            if (!logoutBtn) return;
+
+            var isMobile = window.innerWidth <= 768;
+            var sidebarContainer = pDoc.getElementById('sidebar-logout-container');
+
+            if (isMobile && sidebarContainer) {
+                // Move to sidebar on mobile
+                if (!sidebarContainer.contains(logoutBtn)) {
+                    // Clone the button
+                    var btnClone = logoutBtn.cloneNode(true);
+
+                    // Store reference to original button for click delegation
+                    var originalBtn = logoutBtn;
+
+                    // Add click handler to cloned button that triggers original
+                    btnClone.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        // Trigger click on original button
+                        originalBtn.click();
+                    });
+
+                    // Style for mobile sidebar
+                    btnClone.style.padding = '4px 12px';
+                    btnClone.style.fontSize = '0.75rem';
+                    btnClone.style.minHeight = '28px';
+                    btnClone.style.height = '28px';
+
+                    // Add to sidebar
+                    sidebarContainer.innerHTML = '';
+                    sidebarContainer.appendChild(btnClone);
+
+                    // Hide original header button but keep it in DOM (so it can be clicked)
+                    originalBtn.style.cssText = 'position: absolute; left: -9999px; visibility: hidden;';
+                }
+            } else {
+                // Desktop: ensure button is in header
+                if (sidebarContainer && sidebarContainer.contains(logoutBtn)) {
+                    sidebarContainer.innerHTML = '';
+                }
+                // Show header button
+                var headerBtn = pDoc.querySelector('button.nc-btn-styled');
+                if (headerBtn && headerBtn.innerText.includes('Logout')) {
+                    headerBtn.style.display = 'inline-flex';
+
+                    // Ensure parent alignment
+                    if(headerBtn.parentElement) {
+                        headerBtn.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
+                        if(headerBtn.parentElement.parentElement) {
+                            headerBtn.parentElement.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
+                        }
+                    }
+                }
+            }
+        };
+
         applyTweaks();
+        window.addEventListener('resize', repositionLogout);
+
         if (!window.parent._nc_header_observer) {
             var obs = new MutationObserver(applyTweaks);
             obs.observe(pDoc.body, { childList: true, subtree: true });
@@ -2105,7 +2217,7 @@ grid_html = '<div class="card-grid">'
 # If Cushions: Color, and potentially others if they exist
 # Actually, let's just show all non-technical fields that have data
 TECHNICAL_FIELDS = [
-    "Thumbnail", "Dropbox Folder Path", "Part Number", "Type", "Collection", 
+    "Thumbnail", "Dropbox Folder Path", "Part Number", "Category", "Type", "Collection",
     "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", "BY Image Count",
     "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
 ]
@@ -2218,7 +2330,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         f'<div class="product-card" style="position: relative;">'
             f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Favorites">{shortlist_icon}</div>'
             f'<div class="card-header">'
-                f'<div class="badge">{item["Type"]}</div>'
+                f'<div class="badge">{item.get("Category", item["Type"])}</div>'
                 f'<div class="part-number">{item["Part Number"]}</div>'
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
@@ -2568,7 +2680,7 @@ js_html = """
 """
 components.html(js_html, height=0)
 
-# Bottom Center Pagination (Modern) 
+# Bottom Center Pagination (Modern)
 st.markdown("<br><hr style='border: none; border-top: 1px solid #e2e8f0; margin: 10px 0 20px 0;'>", unsafe_allow_html=True)
 st.markdown("""
 <style>
@@ -2578,28 +2690,129 @@ div[data-testid="stHorizontalBlock"] button {
     font-weight: 600 !important;
     transition: all 0.2s !important;
 }
+
+/* Mobile: Ultra-compact horizontal pagination */
+@media (max-width: 768px) {
+    /* Force horizontal layout - no stacking - AGGRESSIVE */
+    .pagination-mobile [data-testid="stHorizontalBlock"],
+    .pagination-mobile [data-testid="stHorizontalBlock"] > div,
+    .pagination-mobile > div > div > div[data-testid="stHorizontalBlock"] {
+        display: flex !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        gap: 4px !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+
+    /* Make all columns fit inline - AGGRESSIVE */
+    .pagination-mobile [data-testid="stColumn"],
+    .pagination-mobile [data-testid="stHorizontalBlock"] [data-testid="stColumn"],
+    .pagination-mobile div[data-testid="column"] {
+        width: auto !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        flex: 0 0 auto !important;
+        flex-basis: auto !important;
+    }
+
+    /* Override Streamlit's default column stacking */
+    .pagination-mobile [data-testid="stColumn"]:first-child,
+    .pagination-mobile [data-testid="stColumn"]:last-child {
+        flex: 0 0 auto !important;
+    }
+
+    /* Hide empty spacer columns on mobile */
+    .pagination-mobile [data-testid="stColumn"]:first-child,
+    .pagination-mobile [data-testid="stColumn"]:nth-child(6) {
+        display: none !important;
+    }
+
+    /* Compact pagination buttons - ULTRA AGGRESSIVE hiding */
+    .pagination-mobile button {
+        padding: 6px 8px !important;
+        min-width: 36px !important;
+        max-width: 48px !important;
+        font-weight: 400 !important;
+        width: auto !important;
+        overflow: hidden !important;
+        text-overflow: clip !important;
+        font-size: 0 !important;
+        line-height: 0 !important;
+    }
+
+    /* Target all possible text containers inside buttons */
+    .pagination-mobile button *,
+    .pagination-mobile button p,
+    .pagination-mobile button div,
+    .pagination-mobile button span {
+        font-size: 0 !important;
+        line-height: 0 !important;
+        color: transparent !important;
+        max-width: 24px !important;
+        overflow: hidden !important;
+    }
+
+    /* Force emoji to show by targeting ::before pseudo-element */
+    .pagination-mobile button::before {
+        font-size: 20px !important;
+        line-height: normal !important;
+        color: inherit !important;
+    }
+
+    /* Page counter - compact format */
+    .pagination-mobile .page-counter {
+        font-size: 13px !important;
+        padding: 6px 8px !important;
+        white-space: nowrap !important;
+    }
+
+    /* Back to Top - icon only on mobile */
+    .pagination-mobile #back-to-top-btn {
+        padding: 8px 12px !important;
+        font-size: 18px !important;
+        min-width: 44px !important;
+    }
+}
 </style>
 """, unsafe_allow_html=True)
 
+# Add mobile CSS class wrapper
+st.markdown('<div class="pagination-mobile">', unsafe_allow_html=True)
+
 pag_container = st.container()
 with pag_container:
-    pc_left, pc_prev, pc_mid, pc_next, pc_right = st.columns([2, 1, 1.5, 1, 2])
+    # Simpler column layout: [spacer, prev, counter, next, backtotop, spacer]
+    # On mobile: columns will shrink to content width via CSS
+    pc_left, pc_prev, pc_mid, pc_next, pc_right = st.columns([1, 1, 2, 1, 1])
 
     with pc_prev:
-        if st.button("⬅️ Previous", disabled=(st.session_state.current_page <= 1), use_container_width=True):
+        if st.button("⬅️ Previous", disabled=(st.session_state.current_page <= 1), use_container_width=True, key="prev_btn"):
             st.session_state.current_page -= 1
             st.rerun()
 
     with pc_mid:
-        st.markdown(f"<div style='text-align: center; padding-top: 8px; font-weight: 600; color: #475569;'>Page {st.session_state.current_page} of {total_pages}</div>", unsafe_allow_html=True)
+        # Desktop: "Page 1 of 130" | Mobile: "1/130"
+        st.markdown(f"""
+        <div class='page-counter' style='text-align: center; padding-top: 8px; font-weight: 600; color: #475569;'>
+            <span class='desktop-counter'>Page {st.session_state.current_page} of {total_pages}</span>
+            <span class='mobile-counter' style='display:none;'>{st.session_state.current_page}/{total_pages}</span>
+        </div>
+        <style>
+        @media (max-width: 768px) {{
+            .desktop-counter {{ display: none !important; }}
+            .mobile-counter {{ display: inline !important; }}
+        }}
+        </style>
+        """, unsafe_allow_html=True)
 
     with pc_next:
-        if st.button("Next ➡️", disabled=(st.session_state.current_page >= total_pages), use_container_width=True):
+        if st.button("Next ➡️", disabled=(st.session_state.current_page >= total_pages), use_container_width=True, key="next_btn"):
             st.session_state.current_page += 1
             st.rerun()
 
     with pc_right:
-        # Back to Top button - aligned to extreme right (matching Logout position)
+        # Back to Top button - Desktop: "Back to Top" | Mobile: "⬆️"
         st.markdown("""
         <div style="display: flex; justify-content: flex-end; align-items: center;">
             <button id="back-to-top-btn" style="padding:8px 16px;
@@ -2614,7 +2827,8 @@ with pag_container:
                    transition:all 0.3s;
                    outline:none;
                    white-space:nowrap;">
-                Back to Top
+                <span class="desktop-btn-text">Back to Top</span>
+                <span class="mobile-btn-icon" style="display:none;">⬆️</span>
             </button>
         </div>
         <style>
@@ -2624,13 +2838,127 @@ with pag_container:
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(30,64,175,0.3) !important;
         }
+        @media (max-width: 768px) {
+            #back-to-top-btn .desktop-btn-text { display: none !important; }
+            #back-to-top-btn .mobile-btn-icon { display: inline !important; font-size: 18px; }
+        }
         </style>
         """, unsafe_allow_html=True)
 
-# Add JavaScript functionality for Back to Top button
+st.markdown('</div>', unsafe_allow_html=True)
+
+# Add JavaScript functionality for Back to Top button AND mobile button text cleanup
 back_to_top_script = """
 <script>
 (function() {
+    // Mobile button text cleanup - hide text, keep only emojis
+    function setupMobileButtons() {
+        if (window.innerWidth <= 768) {
+            var parentDoc = window.parent.document;
+
+            // Force pagination to be horizontal (backup for CSS)
+            var paginationContainer = parentDoc.querySelector('.pagination-mobile');
+            if (paginationContainer) {
+                var horizontalBlock = paginationContainer.querySelector('[data-testid="stHorizontalBlock"]');
+                if (horizontalBlock) {
+                    horizontalBlock.style.cssText = 'display: flex !important; flex-direction: row !important; flex-wrap: nowrap !important; gap: 4px !important; justify-content: center !important; align-items: center !important;';
+
+                    // Force all columns to inline and hide empty ones
+                    var columns = horizontalBlock.querySelectorAll('[data-testid="stColumn"]');
+                    columns.forEach(function(col, idx) {
+                        // Hide first and last column (spacers)
+                        if (idx === 0 || idx === columns.length - 1) {
+                            col.style.display = 'none';
+                        } else {
+                            col.style.cssText = 'width: auto !important; min-width: 0 !important; max-width: none !important; flex: 0 0 auto !important;';
+                        }
+
+                        // Remove use-container-width styling from buttons
+                        var btnsInCol = col.querySelectorAll('button');
+                        btnsInCol.forEach(function(btn) {
+                            btn.style.width = 'auto';
+                            btn.style.minWidth = '36px';
+                            btn.style.maxWidth = '48px';
+                        });
+                    });
+                }
+            }
+
+            // Find Previous and Next buttons and extract only emoji - SAFE METHOD
+            var buttons = parentDoc.querySelectorAll('.pagination-mobile button');
+            buttons.forEach(function(btn) {
+                var text = btn.innerText || btn.textContent;
+
+                // Check if button needs text cleanup
+                if (text.includes('Previous') && text !== '⬅️') {
+                    // Recursively find and replace text in all child nodes
+                    function replaceText(node, newText) {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            if (node.textContent.includes('Previous')) {
+                                node.textContent = newText;
+                            }
+                        } else {
+                            node.childNodes.forEach(function(child) {
+                                replaceText(child, newText);
+                            });
+                        }
+                    }
+                    replaceText(btn, '⬅️');
+
+                    btn.style.cssText += '; min-width: 44px !important; width: auto !important;';
+                    btn.setAttribute('data-cleaned', 'true');
+                    btn.setAttribute('aria-label', 'Previous');
+
+                } else if (text.includes('Next') && text !== '➡️') {
+                    // Recursively find and replace text in all child nodes
+                    function replaceText(node, newText) {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            if (node.textContent.includes('Next')) {
+                                node.textContent = newText;
+                            }
+                        } else {
+                            node.childNodes.forEach(function(child) {
+                                replaceText(child, newText);
+                            });
+                        }
+                    }
+                    replaceText(btn, '➡️');
+
+                    btn.style.cssText += '; min-width: 44px !important; width: auto !important;';
+                    btn.setAttribute('data-cleaned', 'true');
+                    btn.setAttribute('aria-label', 'Next');
+                }
+            });
+        }
+    }
+
+    // Run on load, on resize, and with multiple delays to catch late renders
+    setupMobileButtons();
+    setTimeout(setupMobileButtons, 50);
+    setTimeout(setupMobileButtons, 100);
+    setTimeout(setupMobileButtons, 200);
+    setTimeout(setupMobileButtons, 500);
+    setTimeout(setupMobileButtons, 1000);
+    window.addEventListener('resize', setupMobileButtons);
+
+    // Watch for button changes and re-apply cleanup
+    if (window.innerWidth <= 768) {
+        var observer = new MutationObserver(function(mutations) {
+            setupMobileButtons();
+        });
+
+        var paginationContainer = window.parent.document.querySelector('.pagination-mobile');
+        if (paginationContainer) {
+            observer.observe(paginationContainer, {
+                childList: true,
+                subtree: true,
+                characterData: true,
+                characterDataOldValue: true
+            });
+        }
+    }
+
+    // Setup Back to Top button click handler
     var btn = window.parent.document.getElementById('back-to-top-btn');
     if (btn && !btn.getAttribute('data-listener-added')) {
         btn.setAttribute('data-listener-added', 'true');
