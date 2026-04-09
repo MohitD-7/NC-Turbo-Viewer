@@ -2173,7 +2173,7 @@ search_query = st.text_input("Search Catalogue", placeholder="🔍 Search Part N
 if search_query and search_query.strip():
     search_terms = [term.strip().lower() for term in search_query.split(',') if term.strip()]
     # Search across strictly whitelisted descriptive columns to prevent matching on URLs
-    whitelist_cols = ["Part Number", "Collection", "Color", "Category", "Type", "Collection Type"]
+    whitelist_cols = ["Part Number", "Collection", "Color", "Category", "Type", "Collection Type", "Product", "Panel", "Arm/Table-Top"]
     searchable_cols = [c for c in filtered_df.columns if c in whitelist_cols]
     for term in search_terms:
         mask = filtered_df[searchable_cols].apply(
