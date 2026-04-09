@@ -2170,14 +2170,16 @@ components.html(mobile_filter_js, height=0)
 
 # Search Bar (Match Reference)
 search_query = st.text_input("Search Catalogue", placeholder="🔍 Search Part Number, Collections, Color...", label_visibility="collapsed")
-if search_query:
-    q = search_query.lower()
-    # Search across all relevant text-based columns
-    searchable_cols = [c for c in filtered_df.columns if not c.endswith("Image") and c != "Local_Thumbnail" and c != "Color_Link" and c != "Image_List"]
-    mask = filtered_df[searchable_cols].apply(
-        lambda row: row.astype(str).str.lower().str.contains(q).any(), axis=1
-    )
-    filtered_df = filtered_df[mask]
+if search_query and search_query.strip():
+    search_terms = [term.strip().lower() for term in search_query.split(',') if term.strip()]
+    # Search across strictly whitelisted descriptive columns to prevent matching on URLs
+    whitelist_cols = ["Part Number", "Collection", "Color", "Category", "Type", "Collection Type"]
+    searchable_cols = [c for c in filtered_df.columns if c in whitelist_cols]
+    for term in search_terms:
+        mask = filtered_df[searchable_cols].apply(
+            lambda row: row.astype(str).str.lower().str.contains(term).any(), axis=1
+        )
+        filtered_df = filtered_df[mask]
 
 st.caption(f"Showing {len(filtered_df)} records")
 
