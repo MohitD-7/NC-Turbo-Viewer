@@ -1657,7 +1657,9 @@ if len(panel_opts) > 1:
     if selected_panels:
         filtered_df = filtered_df[filtered_df["Panel"].isin(selected_panels)]
 
-color_opts = get_options("Color", filtered_df)
+_PRODUCT_TYPE_KEYWORDS = ("seater", "table", "dining chair", "dining set")
+color_opts_raw = get_options("Color", filtered_df)
+color_opts = ["All"] + [c for c in color_opts_raw[1:] if not any(k in c.lower() for k in _PRODUCT_TYPE_KEYWORDS)]
 selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
 if selected_colors:
     filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
@@ -2221,7 +2223,8 @@ grid_html = '<div class="card-grid">'
 TECHNICAL_FIELDS = [
     "Thumbnail", "Dropbox Folder Path", "Part Number", "Category", "Type", "Collection",
     "Collection Type", "Last Modified", "NC Image Count", "OS Image Count", "BY Image Count",
-    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Color_Link", "Part Number_Link"
+    "WF Image Count", "HD Image Count", "Local_Thumbnail", "Image_List", "Image_Source_List",
+    "Color_Link", "Part Number_Link"
 ]
 
 for i, (_, item) in enumerate(paged_data.iterrows()):
