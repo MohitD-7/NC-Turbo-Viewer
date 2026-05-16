@@ -2263,12 +2263,14 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     # Determine fields to display dynamically
     display_fields = []
     product_val_card = str(item.get('Product', '')).lower()
-    is_table_card = 'table' in product_val_card
-    
+    color_val_lower = str(item.get('Color', '')).lower()
+    # Color is a product-type (not a real color) when it matches these keywords
+    is_product_type_color = any(k in color_val_lower for k in _PRODUCT_TYPE_KEYWORDS)
+
     for key in item.keys():
         if key not in TECHNICAL_FIELDS and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
-            # Special check for Color on Tables
-            if key == "Color" and is_table_card:
+            # Hide Color when it's a product-type (e.g. "Corner End Table", "Dining Chair")
+            if key == "Color" and is_product_type_color:
                 continue
             val = get_val(key)
             if val:
@@ -2284,11 +2286,13 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         # For blacklisted items: hyperlink Arm/Table-Top or Product
         if is_blacklisted and pd.notna(item.get('Color_Link')):
             if label == "Arm/Table-Top":
-                # Hyperlink the Arm/Table-Top value
                 final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
             elif label == "Product" and not get_val("Arm/Table-Top"):
-                # Only hyperlink Product if there's NO Arm/Table-Top
                 final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
+
+        # For product-type items where Color is hidden: hyperlink the Product field
+        if is_product_type_color and label == "Product" and pd.notna(item.get('Color_Link')) and not is_blacklisted:
+            final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{val}</a>'
 
         # For non-blacklisted items: hyperlink Color as before
         if label == "Color" and pd.notna(item.get('Color_Link')) and item.get('Color'):
