@@ -1675,12 +1675,11 @@ st.session_state.view_shortlist = view_mode
 if st.session_state.view_shortlist:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
 
-# Favorites List All Visible Button
+# Favorites List All Visible Button (deferred until after search filtering)
+_add_all_visible_clicked = False
 if not filtered_df.empty:
     if st.sidebar.button("Add All Visible to Favorites", use_container_width=True):
-        visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
-        st.session_state.shortlist.update(visible_parts)
-        st.rerun()
+        _add_all_visible_clicked = True
 
 # Clear Shortlist Button
 if st.sidebar.button("Clear All", use_container_width=True):
@@ -1788,7 +1787,10 @@ if len(st.session_state.shortlist) > 0:
                 pdf.set_xy(cell_x, img_y_offset + 2)
                 pdf.set_font('helvetica', 'B', 8)
                 pdf.set_text_color(15, 23, 42)
-                pdf.multi_cell(col_width, 4, str(item['Part Number']), ln=0, align='C')
+                _pdf_pn = str(item['Part Number'])
+                for _srb_suffix in ("-SRB-AM", "-SRB-JM", "-SRB-BL", "-SRB"):
+                    _pdf_pn = _pdf_pn.replace(_srb_suffix, "")
+                pdf.multi_cell(col_width, 4, _pdf_pn, ln=0, align='C')
                 
                 details_y = pdf.get_y() + 1
                 
@@ -2183,6 +2185,12 @@ if search_query and search_query.strip():
         )
         filtered_df = filtered_df[mask]
 
+# Deferred: Add All Visible to Favorites (now filtered_df includes search results)
+if _add_all_visible_clicked:
+    visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
+    st.session_state.shortlist.update(visible_parts)
+    st.rerun()
+
 st.caption(f"Showing {len(filtered_df)} records")
 
 # Pagination Logic - Dynamic based on viewport
@@ -2335,12 +2343,17 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     detail_rows_html = "".join([row_html(lbl, v) for lbl, v in display_fields])
 
     # Build card HTML with unique ID for image and data-urls for carousel
+    # Display Part Number: strip -SRB-AM, -SRB-JM, -SRB-BL, -SRB (longest first)
+    display_pn = item["Part Number"]
+    for _srb_suffix in ("-SRB-AM", "-SRB-JM", "-SRB-BL", "-SRB"):
+        display_pn = display_pn.replace(_srb_suffix, "")
+
     card_html = (
         f'<div class="product-card" style="position: relative;">'
             f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Favorites">{shortlist_icon}</div>'
             f'<div class="card-header">'
                 f'<div class="badge">{item.get("Category", item["Type"])}</div>'
-                f'<div class="part-number">{item["Part Number"]}</div>'
+                f'<div class="part-number">{display_pn}</div>'
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
