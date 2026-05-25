@@ -1480,14 +1480,7 @@ def load_catalogue_data(file_mtime):
     
     if os.path.exists(json_path):
         with open(json_path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            # Pre-clean Part Numbers for instant search matching (cached)
-            for item in data:
-                pn = str(item.get("Part Number", ""))
-                for suffix in ("-SRB-AM", "-SRB-JM", "-SRB-BL", "-SRB"):
-                    pn = pn.replace(suffix, "")
-                item["_clean_part_number"] = pn.lower()
-            return data
+            return json.load(f)
     print(f"Warning: Data file not found at {json_path}")
     return []
 
@@ -2180,8 +2173,11 @@ if search_query and search_query.strip():
     # Search across strictly whitelisted descriptive columns to prevent matching on URLs
     whitelist_cols = ["Part Number", "Collection", "Color", "Category", "Type", "Collection Type", "Product", "Panel", "Arm/Table-Top"]
     searchable_cols = [c for c in filtered_df.columns if c in whitelist_cols]
-    # Retrieve pre-cached cleaned Part Number from DataFrame (optimized)
-    _clean_pn = filtered_df["_clean_part_number"]
+    # Pre-build cleaned Part Number (strip SRB suffixes so hidden parts don't match)
+    _clean_pn = filtered_df["Part Number"].astype(str)
+    for _srb in ("-SRB-AM", "-SRB-JM", "-SRB-BL", "-SRB"):
+        _clean_pn = _clean_pn.str.replace(_srb, "", regex=False)
+    _clean_pn = _clean_pn.str.lower()
     _other_cols = [c for c in searchable_cols if c != "Part Number"]
     for raw_term in raw_terms:
         # Detect exact mode: term wrapped in quotes e.g. "CF"
@@ -2354,16 +2350,16 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
 
     # Carousel HTML (only if more than 1 image)
     carousel_html = ""
-    if len(b64_images) > 1:
+    if len(thumb_urls) > 1:
         dots_html = "".join([
             f'<div class="carousel-dot" data-target="img-{i}" data-idx="{idx}" style="background: {"#3b82f6" if idx == 0 else "#cbd5e1"};"></div>'
-            for idx in range(len(b64_images))
+            for idx in range(len(thumb_urls))
         ])
         carousel_html = (
             f'<div class="carousel-dots">{dots_html}</div>'
             f'<div class="carousel-controls">'
                 f'<div class="carousel-arrow carousel-prev" data-target="img-{i}">&#8249;</div>'
-                f'<div class="image-counter" id="counter-{i}">1/{len(b64_images)}</div>'
+                f'<div class="image-counter" id="counter-{i}">1/{len(thumb_urls)}</div>'
                 f'<div class="carousel-arrow carousel-next" data-target="img-{i}">&#8250;</div>'
             f'</div>'
         )
@@ -2386,7 +2382,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
-                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0" data-total="{len(b64_images)}" style="cursor: pointer;">'
+                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0" data-total="{len(thumb_urls)}" style="cursor: pointer;">'
                 f'{carousel_html}'
             f'</div>'
             f'<div class="card-footer">'
