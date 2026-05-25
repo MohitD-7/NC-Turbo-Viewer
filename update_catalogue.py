@@ -175,11 +175,13 @@ def update_catalogue():
                 for col_idx, header in enumerate(headers):
                     cell = ws.cell(row=row_idx, column=col_idx + 1)
                     val = cell.value
-                    
-                    # Normalize Headers (Cushion Color -> Color)
+
+                    # Normalize Headers (Cushion Color -> Color, Pillow Color -> Color, Parent Folder -> Collection)
                     norm_header = header
                     if header == "Cushion Color": norm_header = "Color"
-                    
+                    if header == "Pillow Color": norm_header = "Color"
+                    if header == "Parent Folder" and "Collection" not in headers: norm_header = "Collection"
+
                     if norm_header in ["Color", "Part Number"]:
                         extracted_value = get_value_from_formula(val)
 
@@ -203,21 +205,43 @@ def update_catalogue():
                             row_data[norm_header] = "Cushion"
                         else:
                             row_data[norm_header] = val_str
+                    elif norm_header == "Category":
+                        # Normalize Category values to singular
+                        val_str = str(val) if val else ""
+                        if val_str.lower() == "cushions":
+                            row_data[norm_header] = "Cushion"
+                        elif val_str.lower() == "accent pillows":
+                            row_data[norm_header] = "Accent Pillow"
+                        else:
+                            row_data[norm_header] = val_str
                     else:
                         row_data[norm_header] = val if val is not None else ""
-                    
+
                     if val: has_data = True
-                
+
+                # Derive Category from Type if Category is missing or empty
+                if "Category" not in row_data or not row_data.get("Category"):
+                    type_val = row_data.get("Type", "").strip()
+                    if type_val.lower() == "furniture":
+                        row_data["Category"] = "Furniture"
+                    elif "cushion" in type_val.lower():
+                        row_data["Category"] = "Cushion"
+                    elif "accent pillow" in type_val.lower():
+                        row_data["Category"] = "Accent Pillow"
+                    else:
+                        # Default to Type value if no match
+                        row_data["Category"] = type_val if type_val else "Uncategorized"
+
                 # Collect ALL potential Dropbox links for this item
                 potential_urls = []
-                img_cols = sorted([h for h in headers if h and "Image" in h and h != "Dropbox Folder Path"], 
+                img_cols = sorted([h for h in headers if h and "Image" in h and h != "Dropbox Folder Path"],
                                  key=lambda x: int(re.search(r'\d+', x).group()) if re.search(r'\d+', x) else 999)
-                
+
                 for h in img_cols:
                     val = row_data.get(h)
                     if val and "dropbox.com" in str(val):
                         potential_urls.append(str(val))
-                
+
                 if has_data:
                     row_data["_potential_urls"] = potential_urls
                     catalogue_data.append(row_data)
