@@ -2301,7 +2301,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     is_product_type_color = any(k in color_val_lower for k in _PRODUCT_TYPE_KEYWORDS)
 
     for key in item.keys():
-        if key not in TECHNICAL_FIELDS and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
+        if key not in TECHNICAL_FIELDS and not key.startswith('_') and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
             # Hide Color when it's a product-type (e.g. "Corner End Table", "Dining Chair")
             if key == "Color" and is_product_type_color:
                 continue
