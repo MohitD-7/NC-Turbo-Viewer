@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import base64
 import hashlib
+from datetime import datetime, timezone
 import streamlit.components.v1 as components
 
 # Page Configuration
@@ -23,6 +24,264 @@ def check_authentication():
 
 def get_user_role():
     return st.session_state.get('user_role', None)
+
+def get_log_path():
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_dir, "data", "activity_events.jsonl")
+
+def log_event(event_type, **details):
+    try:
+        log_path = get_log_path()
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        event = {
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "username": st.session_state.get("username", ""),
+            "role": st.session_state.get("user_role", ""),
+            "event_type": event_type,
+            **details,
+        }
+        with open(log_path, "a", encoding="utf-8") as handle:
+            handle.write(json.dumps(event, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+def log_state_change(state_key, event_type, state_payload):
+    current_state = json.dumps(state_payload, sort_keys=True, default=str)
+    previous_state = st.session_state.get(state_key)
+    st.session_state[state_key] = current_state
+    if previous_state is not None and previous_state != current_state:
+        log_event(event_type, **state_payload)
+
+def load_activity_events():
+    log_path = get_log_path()
+    if not os.path.exists(log_path):
+        return pd.DataFrame()
+
+    events = []
+    with open(log_path, "r", encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+
+    if not events:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(events)
+    if "created_at" in df.columns:
+        df["created_at"] = pd.to_datetime(df["created_at"], errors="coerce")
+    return df
+
+def render_tech_dashboard():
+    def clean_value_counts(series, value_name):
+        if series.empty:
+            return pd.DataFrame(columns=[value_name, "count"])
+        counts = series.dropna().astype(str).str.strip()
+        counts = counts[counts != ""]
+        if counts.empty:
+            return pd.DataFrame(columns=[value_name, "count"])
+        result = counts.value_counts().head(15).reset_index()
+        result.columns = [value_name, "count"]
+        return result
+
+    def explode_logged_values(df, column):
+        if column not in df.columns or df.empty:
+            return pd.Series(dtype="object")
+        values = []
+        for item in df[column].dropna():
+            if isinstance(item, list):
+                values.extend(item)
+            elif isinstance(item, str):
+                text = item.strip()
+                if text.startswith("[") and text.endswith("]"):
+                    try:
+                        parsed = json.loads(text.replace("'", '"'))
+                        if isinstance(parsed, list):
+                            values.extend(parsed)
+                        else:
+                            values.append(text)
+                    except Exception:
+                        values.append(text)
+                else:
+                    values.append(text)
+            else:
+                values.append(item)
+        return pd.Series(values)
+
+    header_col, logout_col = st.columns([4, 1])
+    with header_col:
+        st.title("NorthCape Analytics")
+    with logout_col:
+        if st.button("Logout", use_container_width=True):
+            for key in ['authenticated', 'user_role', 'username']:
+                st.session_state.pop(key, None)
+            st.rerun()
+
+    st.caption("Internal usage analytics from the local activity log. Catalogue data still comes from the current JSON setup.")
+
+    events_df = load_activity_events()
+    if events_df.empty:
+        st.info("No activity has been logged yet.")
+        return
+
+    events_df = events_df.dropna(subset=["created_at"]).sort_values("created_at", ascending=False)
+    if events_df.empty:
+        st.info("No valid timestamped activity has been logged yet.")
+        return
+
+    today = pd.Timestamp.now(tz="UTC").date()
+    range_col, group_col, event_col = st.columns([1.2, 1, 1.4])
+    with range_col:
+        range_choice = st.selectbox(
+            "Time range",
+            ["Today", "Yesterday", "Last 7 days", "Last 30 days", "This month", "Custom"],
+            index=2,
+        )
+    with group_col:
+        group_choice = st.selectbox("Group by", ["Day", "Week", "Month"], index=0)
+    with event_col:
+        event_options = ["All"] + sorted(events_df["event_type"].dropna().astype(str).unique().tolist())
+        selected_event = st.selectbox("Event type", event_options)
+
+    if range_choice == "Today":
+        start_date = today
+        end_date = today
+    elif range_choice == "Yesterday":
+        start_date = today - pd.Timedelta(days=1)
+        end_date = start_date
+    elif range_choice == "Last 7 days":
+        start_date = today - pd.Timedelta(days=6)
+        end_date = today
+    elif range_choice == "Last 30 days":
+        start_date = today - pd.Timedelta(days=29)
+        end_date = today
+    elif range_choice == "This month":
+        start_date = today.replace(day=1)
+        end_date = today
+    else:
+        min_date = events_df["created_at"].dt.date.min()
+        max_date = events_df["created_at"].dt.date.max()
+        custom_range = st.date_input("Custom date range", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+        if isinstance(custom_range, tuple) and len(custom_range) == 2:
+            start_date, end_date = custom_range
+        else:
+            start_date = end_date = custom_range
+
+    filtered_events = events_df[
+        (events_df["created_at"].dt.date >= start_date) &
+        (events_df["created_at"].dt.date <= end_date)
+    ].copy()
+    if selected_event != "All":
+        filtered_events = filtered_events[filtered_events["event_type"].astype(str) == selected_event]
+
+    if filtered_events.empty:
+        st.warning("No activity found for the selected filters.")
+        return
+
+    def event_col(name):
+        if name in filtered_events.columns:
+            return filtered_events[name]
+        return pd.Series([pd.NA] * len(filtered_events), index=filtered_events.index)
+
+    event_type_series = filtered_events["event_type"].astype(str)
+    total_events = len(filtered_events)
+    active_users = filtered_events["username"].replace("", pd.NA).dropna().nunique() if "username" in filtered_events else 0
+    search_count = int((event_type_series == "search").sum())
+    filter_count = int((event_type_series == "filter_change").sum())
+    favorite_count = int(event_type_series.str.startswith("favorite").sum())
+    download_count = int(event_type_series.str.startswith("download").sum())
+    card_open_count = int((event_type_series == "card_open").sum())
+    link_click_count = int((event_type_series == "external_link_click").sum())
+
+    metric_cols = st.columns(6)
+    metric_cols[0].metric("Events", total_events)
+    metric_cols[1].metric("Active Users", active_users)
+    metric_cols[2].metric("Searches", search_count)
+    metric_cols[3].metric("Filters", filter_count)
+    metric_cols[4].metric("Favorites", favorite_count)
+    metric_cols[5].metric("Downloads", download_count)
+    metric_cols_2 = st.columns(2)
+    metric_cols_2[0].metric("Card Opens", card_open_count)
+    metric_cols_2[1].metric("External Link Clicks", link_click_count)
+
+    grouped_events = filtered_events.copy()
+    if group_choice == "Day":
+        grouped_events["period"] = grouped_events["created_at"].dt.date.astype(str)
+    elif group_choice == "Week":
+        grouped_events["period"] = grouped_events["created_at"].dt.to_period("W").astype(str)
+    else:
+        grouped_events["period"] = grouped_events["created_at"].dt.to_period("M").astype(str)
+
+    activity_summary = grouped_events.groupby("period").size().reset_index(name="events").sort_values("period", ascending=False)
+    st.subheader(f"Activity by {group_choice}")
+    st.dataframe(activity_summary, use_container_width=True, hide_index=True)
+
+    left_col, right_col = st.columns(2)
+    with left_col:
+        st.subheader("Top Searches")
+        search_df = filtered_events[(event_type_series == "search") & event_col("query").notna()]
+        st.dataframe(clean_value_counts(search_df["query"] if "query" in search_df.columns else pd.Series(dtype="object"), "query"), use_container_width=True, hide_index=True)
+
+        st.subheader("Top Opened Cards")
+        opened_df = filtered_events[(event_type_series == "card_open") & event_col("part_number").notna()]
+        st.dataframe(clean_value_counts(opened_df["part_number"] if "part_number" in opened_df.columns else pd.Series(dtype="object"), "part_number"), use_container_width=True, hide_index=True)
+
+        st.subheader("Downloads")
+        download_df = filtered_events[event_type_series.str.startswith("download")]
+        st.dataframe(clean_value_counts(download_df["event_type"] if "event_type" in download_df.columns else pd.Series(dtype="object"), "download_type"), use_container_width=True, hide_index=True)
+
+    with right_col:
+        st.subheader("Top Favorites")
+        fav_df = filtered_events[filtered_events["event_type"].isin(["favorite_add", "favorite_bulk_add"]) & event_col("part_number").notna()]
+        st.dataframe(clean_value_counts(fav_df["part_number"] if "part_number" in fav_df.columns else pd.Series(dtype="object"), "part_number"), use_container_width=True, hide_index=True)
+
+        st.subheader("External Link Clicks")
+        link_df = filtered_events[(event_type_series == "external_link_click") & event_col("link_text").notna()]
+        st.dataframe(clean_value_counts(link_df["link_text"] if "link_text" in link_df.columns else pd.Series(dtype="object"), "link_text"), use_container_width=True, hide_index=True)
+
+        st.subheader("Activity by User")
+        st.dataframe(clean_value_counts(event_col("username"), "username"), use_container_width=True, hide_index=True)
+
+    with st.expander("Filter Analytics", expanded=False):
+        filter_df = filtered_events[filtered_events["event_type"] == "filter_change"]
+        filter_cols = st.columns(3)
+        filter_tables = [
+            ("Categories", "selected_categories"),
+            ("Collections", "selected_collections"),
+            ("Colors", "selected_colors"),
+            ("Products", "selected_products"),
+            ("Panels", "selected_panels"),
+            ("Channels", "selected_channels"),
+        ]
+        for idx, (label, column) in enumerate(filter_tables):
+            with filter_cols[idx % 3]:
+                st.markdown(f"**{label}**")
+                st.dataframe(clean_value_counts(explode_logged_values(filter_df, column), label.lower()), use_container_width=True, hide_index=True)
+
+    with st.expander("Event Type Breakdown", expanded=False):
+        st.dataframe(clean_value_counts(event_col("event_type"), "event_type"), use_container_width=True, hide_index=True)
+
+    visible_columns = [
+        c for c in [
+            "created_at", "username", "role", "event_type", "query", "part_number", "count", "format",
+            "selected_channels", "selected_categories", "selected_collections", "selected_products",
+            "selected_panels", "selected_colors", "enabled", "direction", "image_index", "link_text", "url"
+        ]
+        if c in filtered_events.columns
+    ]
+    with st.expander("Advanced: Raw Events", expanded=False):
+        st.download_button(
+            "Download Filtered Log CSV",
+            data=filtered_events[visible_columns].to_csv(index=False).encode("utf-8"),
+            file_name="northcape_activity_log.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+        st.dataframe(filtered_events[visible_columns], use_container_width=True, hide_index=True)
 
 def login_page():
     # Native Static Serving with Cache-Busting: 
@@ -406,6 +665,8 @@ def login_page():
             admin_passwords = list(users_config.get("admin_passwords", []))
             dealer_users = list(users_config.get("dealer_users", []))
             dealer_passwords = list(users_config.get("dealer_passwords", []))
+            tech_users = list(users_config.get("tech_users", []))
+            tech_passwords = list(users_config.get("tech_passwords", []))
 
             authenticated = False
 
@@ -414,6 +675,14 @@ def login_page():
                 if idx < len(admin_passwords) and hashed_pw == admin_passwords[idx]:
                     st.session_state.authenticated = True
                     st.session_state.user_role = "admin"
+                    st.session_state.username = username
+                    authenticated = True
+
+            if not authenticated and username in tech_users:
+                idx = tech_users.index(username)
+                if idx < len(tech_passwords) and hashed_pw == tech_passwords[idx]:
+                    st.session_state.authenticated = True
+                    st.session_state.user_role = "tech"
                     st.session_state.username = username
                     authenticated = True
 
@@ -426,8 +695,10 @@ def login_page():
                     authenticated = True
 
             if authenticated:
+                log_event("login_success")
                 st.rerun()
             else:
+                log_event("login_failure", attempted_username=username)
                 st.error("Invalid username or password")
 
         elif submit:
@@ -438,6 +709,10 @@ if 'authenticated' not in st.session_state:
 
 if not check_authentication():
     login_page()
+    st.stop()
+
+if get_user_role() == "tech":
+    render_tech_dashboard()
     st.stop()
 
 # Force Refresh Commit: Triggering Deployment Rebuild
@@ -1236,7 +1511,8 @@ st.markdown("""
     }
     
     /* Invisible Sync Input - Positioned far off screen but still 'available' to DOM */
-    div[data-testid="stTextInput"]:has(input[placeholder="sync_bridge_v7"]) {
+    div[data-testid="stTextInput"]:has(input[placeholder="sync_bridge_v7"]),
+    div[data-testid="stTextInput"]:has(input[placeholder="js_log_bridge_v1"]) {
         position: fixed;
         left: -100vw;
         top: -100vh;
@@ -1497,6 +1773,10 @@ if 'view_shortlist' not in st.session_state:
     st.session_state.view_shortlist = False
 if "sync_counter" not in st.session_state:
     st.session_state.sync_counter = 0
+if "js_log_counter" not in st.session_state:
+    st.session_state.js_log_counter = 0
+if "last_logged_search" not in st.session_state:
+    st.session_state.last_logged_search = ""
 
 # Helper for Static URLs (Fixes all Cloud/Local pathing issues and operates 100x faster than Base64)
 def get_thumbnail_url(thumb_path):
@@ -1520,11 +1800,32 @@ if sync_val and "|" in sync_val:
         for part in parts:
             if part in st.session_state.shortlist:
                 st.session_state.shortlist.remove(part)
+                log_event("favorite_remove", part_number=part)
             else:
                 st.session_state.shortlist.add(part)
+                log_event("favorite_add", part_number=part)
 
         # Increment counter to ROTATE KEY for next time (handled by Streamlit's natural rerun)
         st.session_state.sync_counter += 1
+    except Exception:
+        pass
+
+js_log_key = f"js_log_v1_{st.session_state.js_log_counter}"
+js_log_val = st.text_input("js_log_bridge", placeholder="js_log_bridge_v1", key=js_log_key, label_visibility="collapsed")
+
+if js_log_val and "|" in js_log_val:
+    try:
+        encoded_payload = js_log_val.split("|", 1)[0]
+        payload_json = base64.b64decode(encoded_payload).decode("utf-8")
+        events = json.loads(payload_json)
+        if isinstance(events, dict):
+            events = [events]
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            event_type = event.pop("event_type", "ui_event")
+            log_event(event_type, **event)
+        st.session_state.js_log_counter += 1
     except Exception:
         pass
 
@@ -1552,6 +1853,7 @@ if user_role == "dealer":
 else:
     all_channels = ["Northcape", "Overstock", "Wayfair", "Home Depot"]
     show_all = st.sidebar.checkbox("All Channels", value=True, key="all_channels_toggle")
+    channel_logic = "OR"
 
     if show_all:
         selected_channels = ["All"]
@@ -1657,6 +1959,19 @@ selected_colors = st.sidebar.multiselect("Color", color_opts[1:])
 if selected_colors:
     filtered_df = filtered_df[filtered_df["Color"].isin(selected_colors)]
 
+filter_state = {
+    "selected_channels": selected_channels,
+    "channel_logic": channel_logic,
+    "selected_categories": selected_categories,
+    "selected_types": locals().get("selected_types", []),
+    "selected_collections": selected_collections,
+    "selected_arms": locals().get("selected_arms", []),
+    "selected_products": locals().get("selected_products", []),
+    "selected_panels": locals().get("selected_panels", []),
+    "selected_colors": selected_colors,
+}
+log_state_change("last_logged_filter_state", "filter_change", filter_state)
+
 # --- Favorites List Management ---
 st.sidebar.divider()
 st.sidebar.markdown(f"### ⭐ Favorites List ({len(st.session_state.shortlist)})")
@@ -1664,6 +1979,7 @@ st.sidebar.markdown(f"### ⭐ Favorites List ({len(st.session_state.shortlist)})
 # View Favorites List Only Toggle
 view_mode = st.sidebar.toggle("View Favorites Only", value=st.session_state.view_shortlist)
 st.session_state.view_shortlist = view_mode
+log_state_change("last_logged_favorites_view_state", "favorites_view_toggle", {"enabled": view_mode})
 
 if st.session_state.view_shortlist:
     filtered_df = filtered_df[filtered_df["Part Number"].isin(st.session_state.shortlist)]
@@ -1676,6 +1992,7 @@ if not filtered_df.empty:
 
 # Clear Shortlist Button
 if st.sidebar.button("Clear All", use_container_width=True):
+    log_event("favorite_clear", count=len(st.session_state.shortlist))
     st.session_state.shortlist = set()
     st.rerun()
 
@@ -1710,7 +2027,8 @@ if len(st.session_state.shortlist) > 0:
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 shortlist_data.to_excel(writer, index=False)
-            st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            if st.sidebar.download_button("Download Excel", data=output.getvalue(), file_name="NC_Shortlist.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"):
+                log_event("download_excel", count=len(shortlist_data), format="xlsx")
         except Exception as e:
             st.sidebar.error("Excel Export failed. Please ensure 'openpyxl' is installed.")
     elif export_format == "PDF Gallery":
@@ -1843,7 +2161,8 @@ if len(st.session_state.shortlist) > 0:
                     current_row += 1
 
             pdf_data = bytes(pdf.output())
-            st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf")
+            if st.sidebar.download_button("Download PDF", data=pdf_data, file_name="NorthCape_Catalogue.pdf", mime="application/pdf"):
+                log_event("download_pdf", count=len(shortlist_data), format="pdf")
             
             # --- PDF Preview Section ---
             st.sidebar.divider()
@@ -1906,13 +2225,14 @@ if uploaded_file is not None:
                 output_buf = _io.BytesIO()
                 with pd.ExcelWriter(output_buf, engine='openpyxl') as writer:
                     matched.to_excel(writer, index=False, sheet_name="Enriched Data")
-                st.sidebar.download_button(
+                if st.sidebar.download_button(
                     f"Download Enriched Excel ({found} items)",
                     data=output_buf.getvalue(),
                     file_name="NC_Enriched_Data.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
-                )
+                ):
+                    log_event("download_enriched_excel", count=found, format="xlsx")
     except Exception as e:
         st.sidebar.error(f"Upload Error: {str(e)}")
 
@@ -1935,7 +2255,7 @@ with header_col2:
     if st.button("Logout"):
         for key in ['authenticated', 'user_role', 'username']:
             st.session_state.pop(key, None)
-        components.html("<script>if(window.parent._nc_header_observer) window.parent._nc_header_observer.disconnect(); window.parent._nc_handlers = null; window.parent._shortlistQueue = [];</script>", height=0)
+        components.html("<script>if(window.parent._nc_header_observer) window.parent._nc_header_observer.disconnect(); window.parent._nc_handlers = null; window.parent._shortlistQueue = []; window.parent._ncUiLogQueue = [];</script>", height=0)
         st.rerun()
 
     components.html("""
@@ -2168,6 +2488,10 @@ components.html(mobile_filter_js, height=0)
 # Search Bar (Match Reference)
 search_query = st.text_input("Search Catalogue", placeholder="🔍 Search Part Number, Collections, Color...", label_visibility="collapsed")
 if search_query and search_query.strip():
+    normalized_search_query = search_query.strip()
+    if normalized_search_query != st.session_state.last_logged_search:
+        st.session_state.last_logged_search = normalized_search_query
+        log_event("search", query=normalized_search_query)
     import re as _re
     raw_terms = [term.strip() for term in search_query.split(',') if term.strip()]
     # Search across strictly whitelisted descriptive columns to prevent matching on URLs
@@ -2208,6 +2532,8 @@ if search_query and search_query.strip():
 if _add_all_visible_clicked:
     visible_parts = set(filtered_df["Part Number"].astype(str).tolist())
     st.session_state.shortlist.update(visible_parts)
+    for part_number in visible_parts:
+        log_event("favorite_bulk_add", part_number=part_number, count=len(visible_parts))
     st.rerun()
 
 st.caption(f"Showing {len(filtered_df)} records")
@@ -2374,7 +2700,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
         display_pn = display_pn.replace(_srb_suffix, "")
 
     card_html = (
-        f'<div class="product-card" style="position: relative;">'
+        f'<div class="product-card" data-part="{item["Part Number"]}" style="position: relative;">'
             f'<div class="shortlist-btn {shortlist_class}" data-part="{item["Part Number"]}" title="Add to Favorites">{shortlist_icon}</div>'
             f'<div class="card-header">'
                 f'<div class="badge">{item.get("Category", item["Type"])}</div>'
@@ -2382,7 +2708,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
                 f'<div class="collection-text">{item["Collection"]}</div>'
             f'</div>'
             f'<div class="image-container">'
-                f'<img id="img-{i}" src="{img_src}" alt="Product" data-urls-b64="{b64_data_attr}" data-idx="0" data-total="{len(thumb_urls)}" style="cursor: pointer;">'
+                f'<img id="img-{i}" src="{img_src}" alt="Product" data-part="{item["Part Number"]}" data-urls-b64="{b64_data_attr}" data-idx="0" data-total="{len(thumb_urls)}" style="cursor: pointer;">'
                 f'{carousel_html}'
             f'</div>'
             f'<div class="card-footer">'
@@ -2430,6 +2756,7 @@ js_html = """
         parentDoc.removeEventListener('click', old.panelOpen, true);
         parentDoc.removeEventListener('click', old.panelControl, true);
         parentDoc.removeEventListener('click', old.shortlist, true);
+        parentDoc.removeEventListener('click', old.linkLog, true);
         parentDoc.removeEventListener('keydown', old.keyboard);
         parentDoc.removeEventListener('touchstart', old.carousel, true);
         parentDoc.removeEventListener('touchstart', old.dot, true);
@@ -2438,6 +2765,42 @@ js_html = """
 
     // --- Shortlist queue (persists across reruns) ---
     if (!window.parent._shortlistQueue) window.parent._shortlistQueue = [];
+    if (!window.parent._ncUiLogQueue) window.parent._ncUiLogQueue = [];
+
+    function partFromElement(el) {
+        var card = el ? el.closest('.product-card') : null;
+        if (card && card.getAttribute('data-part')) return card.getAttribute('data-part');
+        var partEl = el ? el.closest('[data-part]') : null;
+        return partEl ? partEl.getAttribute('data-part') : '';
+    }
+
+    function queueUiLog(eventType, details) {
+        var payload = details || {};
+        payload.event_type = eventType;
+        payload.client_ts = new Date().toISOString();
+        window.parent._ncUiLogQueue.push(payload);
+    }
+
+    function flushUiLog() {
+        var queue = window.parent._ncUiLogQueue;
+        if (!queue || queue.length === 0) return;
+        var targetInput = parentDoc.querySelector('input[placeholder="js_log_bridge_v1"]');
+        if (!targetInput) return;
+
+        var json = JSON.stringify(queue.splice(0, queue.length));
+        var encoded = btoa(unescape(encodeURIComponent(json)));
+        var syncValue = encoded + '|' + Date.now();
+
+        targetInput.focus();
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(targetInput, syncValue);
+        targetInput.dispatchEvent(new Event('input', { bubbles: true }));
+        targetInput.dispatchEvent(new Event('change', { bubbles: true }));
+        targetInput.dispatchEvent(new KeyboardEvent('keydown', {
+            bubbles: true, cancelable: true, keyCode: 13, key: 'Enter', code: 'Enter'
+        }));
+        targetInput.blur();
+    }
 
     function flushShortlist() {
         var queue = window.parent._shortlistQueue;
@@ -2445,6 +2808,7 @@ js_html = """
         var targetInput = parentDoc.querySelector('input[placeholder="sync_bridge_v7"]');
         if (!targetInput) return;
 
+        flushUiLog();
         var syncValue = queue.join(',') + '|' + Date.now();
         window.parent._shortlistQueue = [];
 
@@ -2503,6 +2867,10 @@ js_html = """
         var img = parentDoc.getElementById(targetId);
         if (!img) return;
         var idx = parseInt(img.getAttribute('data-idx')) || 0;
+        queueUiLog('card_carousel_nav', {
+            part_number: partFromElement(img),
+            direction: arrow.classList.contains('carousel-prev') ? 'previous' : 'next'
+        });
         navigateCard(img, arrow.classList.contains('carousel-prev') ? idx - 1 : idx + 1);
     };
 
@@ -2513,7 +2881,13 @@ js_html = """
         e.preventDefault();
         e.stopPropagation();
         var img = parentDoc.getElementById(dot.getAttribute('data-target'));
-        if (img) navigateCard(img, parseInt(dot.getAttribute('data-idx')));
+        if (img) {
+            queueUiLog('card_carousel_dot', {
+                part_number: partFromElement(img),
+                image_index: parseInt(dot.getAttribute('data-idx'))
+            });
+            navigateCard(img, parseInt(dot.getAttribute('data-idx')));
+        }
     };
 
     // --- 3. Slide-in Detail Panel ---
@@ -2609,6 +2983,7 @@ js_html = """
         var backdrop = parentDoc.getElementById('detail-backdrop');
         if (panel) panel.classList.remove('active');
         if (backdrop) backdrop.classList.remove('active');
+        flushUiLog();
     }
 
     function panelNavigate(dir) {
@@ -2625,6 +3000,7 @@ js_html = """
         if (!img) return;
         e.preventDefault();
         e.stopPropagation();
+        queueUiLog('card_open', { part_number: partFromElement(img) });
         openPanel(img);
     };
 
@@ -2632,9 +3008,9 @@ js_html = """
         if (e.target.closest('#detail-panel-close')) { closePanel(); return; }
 
         var prevBtn = e.target.closest('#dp-prev');
-        if (prevBtn) { e.stopPropagation(); panelNavigate(-1); return; }
+        if (prevBtn) { e.stopPropagation(); queueUiLog('detail_image_nav', { direction: 'previous' }); panelNavigate(-1); return; }
         var nextBtn = e.target.closest('#dp-next');
-        if (nextBtn) { e.stopPropagation(); panelNavigate(1); return; }
+        if (nextBtn) { e.stopPropagation(); queueUiLog('detail_image_nav', { direction: 'next' }); panelNavigate(1); return; }
 
         var dpDot = e.target.closest('.dp-dot');
         if (dpDot) {
@@ -2642,6 +3018,7 @@ js_html = """
             var idx = parseInt(dpDot.getAttribute('data-dp-idx'));
             if (!isNaN(idx) && idx >= 0 && idx < panelUrls.length) {
                 panelIdx = idx;
+                queueUiLog('detail_image_dot', { image_index: idx });
                 updatePanelImage();
             }
             return;
@@ -2663,6 +3040,7 @@ js_html = """
                     cardBtn.innerHTML = cardBtn.classList.contains('active') ? '⭐' : '☆';
                 }
                 queueShortlist(part);
+                flushUiLog();
             }
             return;
         }
@@ -2700,12 +3078,24 @@ js_html = """
         queueShortlist(part);
     };
 
+    var linkLogHandler = function(e) {
+        var link = e.target.closest('a.color-link');
+        if (!link) return;
+        queueUiLog('external_link_click', {
+            part_number: partFromElement(link),
+            link_text: (link.textContent || '').trim(),
+            url: link.href || ''
+        });
+        setTimeout(flushUiLog, 50);
+    };
+
     // --- Register all handlers (capture phase) ---
     parentDoc.addEventListener('click', carouselHandler, true);
     parentDoc.addEventListener('click', dotHandler, true);
     parentDoc.addEventListener('click', panelOpenHandler, true);
     parentDoc.addEventListener('click', panelControlHandler, true);
     parentDoc.addEventListener('click', shortlistHandler, true);
+    parentDoc.addEventListener('click', linkLogHandler, true);
     parentDoc.addEventListener('keydown', keyboardHandler);
     parentDoc.addEventListener('touchstart', carouselHandler, true);
     parentDoc.addEventListener('touchstart', dotHandler, true);
@@ -2718,6 +3108,7 @@ js_html = """
         panelOpen: panelOpenHandler,
         panelControl: panelControlHandler,
         shortlist: shortlistHandler,
+        linkLog: linkLogHandler,
         keyboard: keyboardHandler
     };
 

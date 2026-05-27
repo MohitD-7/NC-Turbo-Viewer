@@ -8,6 +8,7 @@ __pycache__/
 .vscode/
 .idea/
 data/catalogue.json.bak
+data/activity_events.jsonl
 # Keep the static/thumbnails and data/catalogue.json for deployment
 !data/catalogue.json
 !static/thumbnails/
