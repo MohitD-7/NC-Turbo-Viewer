@@ -1911,18 +1911,10 @@ if df.empty or "Collection Type" not in df.columns:
         st.write("Columns found:", df.columns.tolist())
     st.stop()
 
-# Primary Category filter (Cushion, Furniture, Accent Pillow)
-category_options = get_options("Category", df)
-selected_categories = st.sidebar.multiselect("Category", category_options[1:], help="Select product categories (Cushion, Furniture, Accent Pillow)")
+# Primary Category filter — exclude "Cushion" (singular/legacy), keep "Cushions"
+category_options = [o for o in get_options("Category", df) if o != "Cushion"]
+selected_categories = st.sidebar.multiselect("Category", category_options[1:], help="Select product categories")
 filtered_df = df[df["Category"].isin(selected_categories)] if selected_categories else df
-
-# Cushion-specific Type filter (only show when Cushion category is selected)
-if selected_categories and "Cushion" in selected_categories:
-    type_options = get_options("Type", filtered_df[filtered_df["Category"] == "Cushion"])
-    if len(type_options) > 1:
-        selected_types = st.sidebar.multiselect("Cushion Type", type_options[1:], help="Select specific cushion types")
-        if selected_types:
-            filtered_df = filtered_df[filtered_df["Type"].isin(selected_types)]
 
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
 # Series dropdown removed as requested by the client
