@@ -2671,7 +2671,11 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     badge_channels = [("NC", "NC Image Count")] if user_role == "dealer" else [("NC", "NC Image Count"), ("BY", "BY Image Count"), ("WF", "WF Image Count"), ("HD", "HD Image Count")]
     for label, col in badge_channels:
         count = item.get(col, 0)
-        if pd.notna(count) and count > 0:
+        try:
+            count = int(count) if pd.notna(count) else 0
+        except (ValueError, TypeError):
+            count = 0
+        if count > 0:
             image_stats_html += f'<div class="detail-row"><span class="detail-label">{label} Images</span><span class="detail-value">{int(count)}</span></div>'
 
     # Carousel HTML (only if more than 1 image)
