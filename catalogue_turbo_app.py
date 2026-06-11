@@ -2170,6 +2170,16 @@ if len(st.session_state.shortlist) > 0:
 # --- Upload Excel: Enrich Part Numbers with Catalogue Data ---
 st.sidebar.divider()
 st.sidebar.markdown("### 📤 Upload Part Numbers")
+
+# Match mode: keep SRBs (exact) or strip SRBs (lenient)
+match_mode = st.sidebar.radio(
+    "Match mode",
+    options=["Keep SRBs (exact)", "Strip SRBs (lenient)"],
+    index=1,
+    key="part_upload_match_mode",
+    help="Strip SRBs: matches NC5306C-CFN to NC5306C-SRB-CFN. Use this if your Excel doesn't have -SRB- segments."
+)
+
 uploaded_file = st.sidebar.file_uploader(
     "Upload Excel with Part Numbers in the first column",
     type=["xlsx"],
@@ -2189,8 +2199,23 @@ if uploaded_file is not None:
             first_col_name = uploaded_df.columns[0]
             part_numbers = uploaded_df[first_col_name].dropna().astype(str).str.strip().tolist()
 
-            # Match against catalogue
-            matched = df[df["Part Number"].isin(part_numbers)]
+            # Match against catalogue — mode chosen via radio button above
+            if match_mode == "Strip SRBs (lenient)":
+                def _normalize_pn(pn: str) -> str:
+                    s = str(pn).strip()
+                    for _srb in ("-SRB-AM", "-SRB-JM", "-SRB-BL", "-SRB"):
+                        s = s.replace(_srb, "")
+                    return s.lower()
+
+                df_normalised = df["Part Number"].astype(str).map(_normalize_pn)
+                uploaded_set = {_normalize_pn(pn) for pn in part_numbers}
+                matched = df[df_normalised.isin(uploaded_set)]
+                # Track which uploaded PNs matched (for the not_found list)
+                matched_normalised = set(df_normalised[df_normalised.isin(uploaded_set)].tolist())
+                not_found_pns = [pn for pn in part_numbers if _normalize_pn(pn) not in matched_normalised]
+            else:
+                matched = df[df["Part Number"].isin(part_numbers)]
+                not_found_pns = [pn for pn in part_numbers if pn not in matched["Part Number"].values]
 
             # Reorder columns with priority
             cols = matched.columns.tolist()
@@ -2204,19 +2229,22 @@ if uploaded_file is not None:
             matched = matched[ordered]
 
             found = len(matched)
-            not_found = [pn for pn in part_numbers if pn not in matched["Part Number"].values]
 
             st.sidebar.success(f"Matched **{found}** of {len(part_numbers)} part numbers")
-            if not_found:
-                with st.sidebar.expander(f"{len(not_found)} not found"):
-                    st.sidebar.caption("\n".join(not_found[:50]))
-                    if len(not_found) > 50:
-                        st.sidebar.caption(f"...and {len(not_found) - 50} more")
+            if not_found_pns:
+                with st.sidebar.expander(f"{len(not_found_pns)} not found"):
+                    st.sidebar.caption("\n".join(not_found_pns[:50]))
+                    if len(not_found_pns) > 50:
+                        st.sidebar.caption(f"...and {len(not_found_pns) - 50} more")
 
             if found > 0:
                 output_buf = _io.BytesIO()
                 with pd.ExcelWriter(output_buf, engine='openpyxl') as writer:
                     matched.to_excel(writer, index=False, sheet_name="Enriched Data")
+                    # Add a "Not Found" sheet listing SKUs that did not match
+                    if not_found_pns:
+                        not_found_df = pd.DataFrame({"Part Number": not_found_pns})
+                        not_found_df.to_excel(writer, index=False, sheet_name="Not Found")
                 if st.sidebar.download_button(
                     f"Download Enriched Excel ({found} items)",
                     data=output_buf.getvalue(),
@@ -2224,7 +2252,7 @@ if uploaded_file is not None:
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     use_container_width=True
                 ):
-                    log_event("download_enriched_excel", count=found, format="xlsx")
+                    log_event("download_enriched_excel", count=found, format="xlsx", not_found=len(not_found_pns))
     except Exception as e:
         st.sidebar.error(f"Upload Error: {str(e)}")
 
