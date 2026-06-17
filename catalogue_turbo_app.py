@@ -1127,7 +1127,24 @@ st.markdown("""
     .product-card:hover .image-container img {
         transform: scale(1.25);
     }
-    
+
+    /* Hover preview — instantly shows the 2nd thumbnail on card hover */
+    .image-container .hover-image {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        opacity: 0;
+        transition: none;
+        pointer-events: none;
+        z-index: 1;
+    }
+    .product-card:hover .image-container .hover-image {
+        opacity: 1;
+    }
+
     /* Image Container & Carousel */
     .image-container {
         position: relative;
@@ -2027,14 +2044,18 @@ st.sidebar.title("")
 
 user_role = get_user_role()
 
-# Added back per user request - with inline logout on mobile
-# Use flexbox container for perfect alignment - logout will be moved here by JS on mobile
-st.sidebar.markdown(f"""
-<div id='sidebar-user-header' style='display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;'>
-    <div style='color: #0f172a; font-weight: 700; font-size: 1.15rem;'>Hi, {st.session_state.get('username', '')}</div>
-    <div id='sidebar-logout-container'></div>
-</div>
-""", unsafe_allow_html=True)
+# Sidebar user header — greeting + logout button on the same row
+_greet_col, _logout_col = st.sidebar.columns([3, 2])
+with _greet_col:
+    st.markdown(
+        f"<div style='color: #0f172a; font-weight: 700; font-size: 1.15rem; padding-top: 6px;'>Hi, {st.session_state.get('username', '')}</div>",
+        unsafe_allow_html=True,
+    )
+with _logout_col:
+    if st.button("Logout", key="sidebar_logout", use_container_width=True):
+        for _key in ['authenticated', 'user_role', 'username']:
+            st.session_state.pop(_key, None)
+        st.rerun()
 
 st.sidebar.divider()
 
@@ -2561,122 +2582,11 @@ if selected_lm_dates:
 # Add anchor for Back to Top button
 st.markdown('<div id="top-anchor"></div>', unsafe_allow_html=True)
 
-header_col1, header_col2 = st.columns([4, 1])
-with header_col1:
-    st.markdown("""
-    <div class="hero-container" style="padding: 0 !important; margin: 0 !important; display: flex; align-items: center;">
-        <div class="hero-title" style="margin: 0 !important; line-height: 1.1;">NorthCape Image Library</div>
-    </div>
-    """, unsafe_allow_html=True)
-with header_col2:
-    if st.button("Logout"):
-        for key in ['authenticated', 'user_role', 'username']:
-            st.session_state.pop(key, None)
-        components.html("<script>if(window.parent._nc_header_observer) window.parent._nc_header_observer.disconnect(); window.parent._nc_handlers = null; window.parent._shortlistQueue = []; window.parent._ncUiLogQueue = [];</script>", height=0)
-        st.rerun()
-
-    components.html("""
-    <script>
-    (function() {
-        var pDoc = window.parent.document;
-        var logoutBtn = null;
-        var isMobile = window.parent.innerWidth <= 768;
-
-        var applyTweaks = function() {
-            var btns = pDoc.querySelectorAll('button');
-            btns.forEach(b => {
-                if(b.innerText.includes('Logout') && !b.classList.contains('nc-btn-styled')) {
-                    b.classList.add('nc-btn-styled');
-                    logoutBtn = b;
-
-                    // Style the button
-                    b.style.cssText = "border: 1px solid #3b82f6 !important; border-radius: 50px !important; color: #1e40af !important; background-color: transparent !important; padding: 0 16px !important; height: 32px !important; min-height: 32px !important; width: auto !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; font-weight: 600 !important; font-size: 0.8rem !important; transition: all 0.2s !important;";
-                    b.onmouseover = function() { b.style.backgroundColor='#eff6ff'; b.style.borderColor='#1e40af'; };
-                    b.onmouseout = function() { b.style.backgroundColor='transparent'; b.style.borderColor='#3b82f6'; };
-
-                    // Move to sidebar on mobile, keep in header on desktop
-                    repositionLogout();
-                }
-            });
-
-            var titles = pDoc.querySelectorAll('.hero-title');
-            titles.forEach(t => {
-                var row = t.closest('div[data-testid="stHorizontalBlock"]');
-                if (row && !row.classList.contains('nc-row-aligned')) {
-                    row.classList.add('nc-row-aligned');
-                    row.style.alignItems = 'center';
-                }
-            });
-        };
-
-        var repositionLogout = function() {
-            if (!logoutBtn) return;
-
-            var isMobile = window.parent.innerWidth <= 768;
-            var sidebarContainer = pDoc.getElementById('sidebar-logout-container');
-
-            if (isMobile && sidebarContainer) {
-                // Move to sidebar on mobile
-                if (!sidebarContainer.contains(logoutBtn)) {
-                    // Clone the button
-                    var btnClone = logoutBtn.cloneNode(true);
-
-                    // Store reference to original button for click delegation
-                    var originalBtn = logoutBtn;
-
-                    // Add click handler to cloned button that triggers original
-                    btnClone.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // Trigger click on original button
-                        originalBtn.click();
-                    });
-
-                    // Style for mobile sidebar
-                    btnClone.style.padding = '4px 12px';
-                    btnClone.style.fontSize = '0.75rem';
-                    btnClone.style.minHeight = '28px';
-                    btnClone.style.height = '28px';
-
-                    // Add to sidebar
-                    sidebarContainer.innerHTML = '';
-                    sidebarContainer.appendChild(btnClone);
-
-                    // Hide original header button but keep it in DOM (so it can be clicked)
-                    originalBtn.style.cssText = 'position: absolute; left: -9999px; visibility: hidden;';
-                }
-            } else {
-                // Desktop: ensure button is in header
-                if (sidebarContainer && sidebarContainer.contains(logoutBtn)) {
-                    sidebarContainer.innerHTML = '';
-                }
-                // Show header button
-                var headerBtn = pDoc.querySelector('button.nc-btn-styled');
-                if (headerBtn && headerBtn.innerText.includes('Logout')) {
-                    headerBtn.style.display = 'inline-flex';
-
-                    // Ensure parent alignment
-                    if(headerBtn.parentElement) {
-                        headerBtn.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
-                        if(headerBtn.parentElement.parentElement) {
-                            headerBtn.parentElement.parentElement.style.cssText = "display: flex !important; justify-content: flex-end !important; width: 100% !important;";
-                        }
-                    }
-                }
-            }
-        };
-
-        applyTweaks();
-        window.addEventListener('resize', repositionLogout);
-
-        if (!window.parent._nc_header_observer) {
-            var obs = new MutationObserver(applyTweaks);
-            obs.observe(pDoc.body, { childList: true, subtree: true });
-            window.parent._nc_header_observer = obs;
-        }
-    })();
-    </script>
-    """, height=0)
+st.markdown("""
+<div class="hero-container" style="padding: 0 !important; margin: 0 !important; display: flex; align-items: center;">
+    <div class="hero-title" style="margin: 0 !important; line-height: 1.1;">NorthCape Image Library</div>
+</div>
+""", unsafe_allow_html=True)
 # Mobile Filter Button and Backdrop - HTML (visible in page)
 mobile_filter_html = """
 <button class="mobile-filter-btn" id="mobile-filter-button">
@@ -3030,6 +2940,7 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
             f'</div>'
             f'<div class="image-container">'
                 f'<img id="img-{i}" src="{img_src}" alt="Product" data-part="{item["Part Number"]}" data-urls-b64="{b64_data_attr}" data-idx="0" data-total="{len(thumb_urls)}" style="cursor: pointer;">'
+                + (f'<img class="hover-image" src="{thumb_urls[1]}" alt="" loading="lazy">' if len(thumb_urls) > 1 else '') +
                 f'{carousel_html}'
             f'</div>'
             f'<div class="card-footer">'
