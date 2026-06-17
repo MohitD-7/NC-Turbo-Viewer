@@ -2580,7 +2580,7 @@ with header_col2:
     (function() {
         var pDoc = window.parent.document;
         var logoutBtn = null;
-        var isMobile = window.innerWidth <= 768;
+        var isMobile = window.parent.innerWidth <= 768;
 
         var applyTweaks = function() {
             var btns = pDoc.querySelectorAll('button');
@@ -2612,7 +2612,7 @@ with header_col2:
         var repositionLogout = function() {
             if (!logoutBtn) return;
 
-            var isMobile = window.innerWidth <= 768;
+            var isMobile = window.parent.innerWidth <= 768;
             var sidebarContainer = pDoc.getElementById('sidebar-logout-container');
 
             if (isMobile && sidebarContainer) {
@@ -3290,7 +3290,7 @@ js_html = """
         panel.classList.add('active');
         if (backdrop) backdrop.classList.add('active');
 
-        if (window.innerWidth > 768) {
+        if (window.parent.innerWidth > 768) {
             var collapseBtn = parentDoc.querySelector('[data-testid="stSidebarCollapseButton"] button, [data-testid="collapsedControl"] button');
             var sidebar = parentDoc.querySelector('[data-testid="stSidebar"]');
             if (sidebar && sidebar.getAttribute('aria-expanded') === 'true' && collapseBtn) {
@@ -3612,7 +3612,7 @@ back_to_top_script = """
 (function() {
     // Mobile button text cleanup - hide text, keep only emojis
     function setupMobileButtons() {
-        if (window.innerWidth <= 768) {
+        if (window.parent.innerWidth <= 768) {
             var parentDoc = window.parent.document;
 
             // Force pagination to be horizontal (backup for CSS)
@@ -3701,7 +3701,7 @@ back_to_top_script = """
     window.addEventListener('resize', setupMobileButtons);
 
     // Watch for button changes and re-apply cleanup
-    if (window.innerWidth <= 768) {
+    if (window.parent.innerWidth <= 768) {
         var observer = new MutationObserver(function(mutations) {
             setupMobileButtons();
         });
