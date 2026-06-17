@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import base64
 import hashlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import streamlit.components.v1 as components
 
 # Page Configuration
@@ -121,167 +121,360 @@ def render_tech_dashboard():
                 st.session_state.pop(key, None)
             st.rerun()
 
-    st.caption("Internal usage analytics from the local activity log. Catalogue data still comes from the current JSON setup.")
+    def _render_analytics():
+        st.caption("Internal usage analytics from the local activity log. Catalogue data still comes from the current JSON setup.")
 
-    events_df = load_activity_events()
-    if events_df.empty:
-        st.info("No activity has been logged yet.")
-        return
+        events_df = load_activity_events()
+        if events_df.empty:
+            st.info("No activity has been logged yet.")
+            return
 
-    events_df = events_df.dropna(subset=["created_at"]).sort_values("created_at", ascending=False)
-    if events_df.empty:
-        st.info("No valid timestamped activity has been logged yet.")
-        return
+        events_df = events_df.dropna(subset=["created_at"]).sort_values("created_at", ascending=False)
+        if events_df.empty:
+            st.info("No valid timestamped activity has been logged yet.")
+            return
 
-    today = pd.Timestamp.now(tz="UTC").date()
-    range_col, group_col, event_col = st.columns([1.2, 1, 1.4])
-    with range_col:
-        range_choice = st.selectbox(
-            "Time range",
-            ["Today", "Yesterday", "Last 7 days", "Last 30 days", "This month", "Custom"],
-            index=2,
-        )
-    with group_col:
-        group_choice = st.selectbox("Group by", ["Day", "Week", "Month"], index=0)
-    with event_col:
-        event_options = ["All"] + sorted(events_df["event_type"].dropna().astype(str).unique().tolist())
-        selected_event = st.selectbox("Event type", event_options)
+        today = pd.Timestamp.now(tz="UTC").date()
+        range_col, group_col, event_col = st.columns([1.2, 1, 1.4])
+        with range_col:
+            range_choice = st.selectbox(
+                "Time range",
+                ["Today", "Yesterday", "Last 7 days", "Last 30 days", "This month", "Custom"],
+                index=2,
+            )
+        with group_col:
+            group_choice = st.selectbox("Group by", ["Day", "Week", "Month"], index=0)
+        with event_col:
+            event_options = ["All"] + sorted(events_df["event_type"].dropna().astype(str).unique().tolist())
+            selected_event = st.selectbox("Event type", event_options)
 
-    if range_choice == "Today":
-        start_date = today
-        end_date = today
-    elif range_choice == "Yesterday":
-        start_date = today - pd.Timedelta(days=1)
-        end_date = start_date
-    elif range_choice == "Last 7 days":
-        start_date = today - pd.Timedelta(days=6)
-        end_date = today
-    elif range_choice == "Last 30 days":
-        start_date = today - pd.Timedelta(days=29)
-        end_date = today
-    elif range_choice == "This month":
-        start_date = today.replace(day=1)
-        end_date = today
-    else:
-        min_date = events_df["created_at"].dt.date.min()
-        max_date = events_df["created_at"].dt.date.max()
-        custom_range = st.date_input("Custom date range", value=(min_date, max_date), min_value=min_date, max_value=max_date)
-        if isinstance(custom_range, tuple) and len(custom_range) == 2:
-            start_date, end_date = custom_range
+        if range_choice == "Today":
+            start_date = today
+            end_date = today
+        elif range_choice == "Yesterday":
+            start_date = today - pd.Timedelta(days=1)
+            end_date = start_date
+        elif range_choice == "Last 7 days":
+            start_date = today - pd.Timedelta(days=6)
+            end_date = today
+        elif range_choice == "Last 30 days":
+            start_date = today - pd.Timedelta(days=29)
+            end_date = today
+        elif range_choice == "This month":
+            start_date = today.replace(day=1)
+            end_date = today
         else:
-            start_date = end_date = custom_range
+            min_date = events_df["created_at"].dt.date.min()
+            max_date = events_df["created_at"].dt.date.max()
+            custom_range = st.date_input("Custom date range", value=(min_date, max_date), min_value=min_date, max_value=max_date)
+            if isinstance(custom_range, tuple) and len(custom_range) == 2:
+                start_date, end_date = custom_range
+            else:
+                start_date = end_date = custom_range
 
-    filtered_events = events_df[
-        (events_df["created_at"].dt.date >= start_date) &
-        (events_df["created_at"].dt.date <= end_date)
-    ].copy()
-    if selected_event != "All":
-        filtered_events = filtered_events[filtered_events["event_type"].astype(str) == selected_event]
+        filtered_events = events_df[
+            (events_df["created_at"].dt.date >= start_date) &
+            (events_df["created_at"].dt.date <= end_date)
+        ].copy()
+        if selected_event != "All":
+            filtered_events = filtered_events[filtered_events["event_type"].astype(str) == selected_event]
 
-    if filtered_events.empty:
-        st.warning("No activity found for the selected filters.")
-        return
+        if filtered_events.empty:
+            st.warning("No activity found for the selected filters.")
+            return
 
-    def event_col(name):
-        if name in filtered_events.columns:
-            return filtered_events[name]
-        return pd.Series([pd.NA] * len(filtered_events), index=filtered_events.index)
+        def event_col(name):
+            if name in filtered_events.columns:
+                return filtered_events[name]
+            return pd.Series([pd.NA] * len(filtered_events), index=filtered_events.index)
 
-    event_type_series = filtered_events["event_type"].astype(str)
-    total_events = len(filtered_events)
-    active_users = filtered_events["username"].replace("", pd.NA).dropna().nunique() if "username" in filtered_events else 0
-    search_count = int((event_type_series == "search").sum())
-    filter_count = int((event_type_series == "filter_change").sum())
-    favorite_count = int(event_type_series.str.startswith("favorite").sum())
-    download_count = int(event_type_series.str.startswith("download").sum())
-    card_open_count = int((event_type_series == "card_open").sum())
-    link_click_count = int((event_type_series == "external_link_click").sum())
+        event_type_series = filtered_events["event_type"].astype(str)
+        total_events = len(filtered_events)
+        active_users = filtered_events["username"].replace("", pd.NA).dropna().nunique() if "username" in filtered_events else 0
+        search_count = int((event_type_series == "search").sum())
+        filter_count = int((event_type_series == "filter_change").sum())
+        favorite_count = int(event_type_series.str.startswith("favorite").sum())
+        download_count = int(event_type_series.str.startswith("download").sum())
+        card_open_count = int((event_type_series == "card_open").sum())
+        link_click_count = int((event_type_series == "external_link_click").sum())
 
-    metric_cols = st.columns(6)
-    metric_cols[0].metric("Events", total_events)
-    metric_cols[1].metric("Active Users", active_users)
-    metric_cols[2].metric("Searches", search_count)
-    metric_cols[3].metric("Filters", filter_count)
-    metric_cols[4].metric("Favorites", favorite_count)
-    metric_cols[5].metric("Downloads", download_count)
-    metric_cols_2 = st.columns(2)
-    metric_cols_2[0].metric("Card Opens", card_open_count)
-    metric_cols_2[1].metric("External Link Clicks", link_click_count)
+        metric_cols = st.columns(6)
+        metric_cols[0].metric("Events", total_events)
+        metric_cols[1].metric("Active Users", active_users)
+        metric_cols[2].metric("Searches", search_count)
+        metric_cols[3].metric("Filters", filter_count)
+        metric_cols[4].metric("Favorites", favorite_count)
+        metric_cols[5].metric("Downloads", download_count)
+        metric_cols_2 = st.columns(2)
+        metric_cols_2[0].metric("Card Opens", card_open_count)
+        metric_cols_2[1].metric("External Link Clicks", link_click_count)
 
-    grouped_events = filtered_events.copy()
-    if group_choice == "Day":
-        grouped_events["period"] = grouped_events["created_at"].dt.date.astype(str)
-    elif group_choice == "Week":
-        grouped_events["period"] = grouped_events["created_at"].dt.to_period("W").astype(str)
-    else:
-        grouped_events["period"] = grouped_events["created_at"].dt.to_period("M").astype(str)
+        grouped_events = filtered_events.copy()
+        if group_choice == "Day":
+            grouped_events["period"] = grouped_events["created_at"].dt.date.astype(str)
+        elif group_choice == "Week":
+            grouped_events["period"] = grouped_events["created_at"].dt.to_period("W").astype(str)
+        else:
+            grouped_events["period"] = grouped_events["created_at"].dt.to_period("M").astype(str)
 
-    activity_summary = grouped_events.groupby("period").size().reset_index(name="events").sort_values("period", ascending=False)
-    st.subheader(f"Activity by {group_choice}")
-    st.dataframe(activity_summary, use_container_width=True, hide_index=True)
+        activity_summary = grouped_events.groupby("period").size().reset_index(name="events").sort_values("period", ascending=False)
+        st.subheader(f"Activity by {group_choice}")
+        st.dataframe(activity_summary, use_container_width=True, hide_index=True)
 
-    left_col, right_col = st.columns(2)
-    with left_col:
-        st.subheader("Top Searches")
-        search_df = filtered_events[(event_type_series == "search") & event_col("query").notna()]
-        st.dataframe(clean_value_counts(search_df["query"] if "query" in search_df.columns else pd.Series(dtype="object"), "query"), use_container_width=True, hide_index=True)
+        left_col, right_col = st.columns(2)
+        with left_col:
+            st.subheader("Top Searches")
+            search_df = filtered_events[(event_type_series == "search") & event_col("query").notna()]
+            st.dataframe(clean_value_counts(search_df["query"] if "query" in search_df.columns else pd.Series(dtype="object"), "query"), use_container_width=True, hide_index=True)
 
-        st.subheader("Top Opened Cards")
-        opened_df = filtered_events[(event_type_series == "card_open") & event_col("part_number").notna()]
-        st.dataframe(clean_value_counts(opened_df["part_number"] if "part_number" in opened_df.columns else pd.Series(dtype="object"), "part_number"), use_container_width=True, hide_index=True)
+            st.subheader("Top Opened Cards")
+            opened_df = filtered_events[(event_type_series == "card_open") & event_col("part_number").notna()]
+            st.dataframe(clean_value_counts(opened_df["part_number"] if "part_number" in opened_df.columns else pd.Series(dtype="object"), "part_number"), use_container_width=True, hide_index=True)
 
-        st.subheader("Downloads")
-        download_df = filtered_events[event_type_series.str.startswith("download")]
-        st.dataframe(clean_value_counts(download_df["event_type"] if "event_type" in download_df.columns else pd.Series(dtype="object"), "download_type"), use_container_width=True, hide_index=True)
+            st.subheader("Downloads")
+            download_df = filtered_events[event_type_series.str.startswith("download")]
+            st.dataframe(clean_value_counts(download_df["event_type"] if "event_type" in download_df.columns else pd.Series(dtype="object"), "download_type"), use_container_width=True, hide_index=True)
 
-    with right_col:
-        st.subheader("Top Favorites")
-        fav_df = filtered_events[filtered_events["event_type"].isin(["favorite_add", "favorite_bulk_add"]) & event_col("part_number").notna()]
-        st.dataframe(clean_value_counts(fav_df["part_number"] if "part_number" in fav_df.columns else pd.Series(dtype="object"), "part_number"), use_container_width=True, hide_index=True)
+        with right_col:
+            st.subheader("Top Favorites")
+            fav_df = filtered_events[filtered_events["event_type"].isin(["favorite_add", "favorite_bulk_add"]) & event_col("part_number").notna()]
+            st.dataframe(clean_value_counts(fav_df["part_number"] if "part_number" in fav_df.columns else pd.Series(dtype="object"), "part_number"), use_container_width=True, hide_index=True)
 
-        st.subheader("External Link Clicks")
-        link_df = filtered_events[(event_type_series == "external_link_click") & event_col("link_text").notna()]
-        st.dataframe(clean_value_counts(link_df["link_text"] if "link_text" in link_df.columns else pd.Series(dtype="object"), "link_text"), use_container_width=True, hide_index=True)
+            st.subheader("External Link Clicks")
+            link_df = filtered_events[(event_type_series == "external_link_click") & event_col("link_text").notna()]
+            st.dataframe(clean_value_counts(link_df["link_text"] if "link_text" in link_df.columns else pd.Series(dtype="object"), "link_text"), use_container_width=True, hide_index=True)
 
-        st.subheader("Activity by User")
-        st.dataframe(clean_value_counts(event_col("username"), "username"), use_container_width=True, hide_index=True)
+            st.subheader("Activity by User")
+            st.dataframe(clean_value_counts(event_col("username"), "username"), use_container_width=True, hide_index=True)
 
-    with st.expander("Filter Analytics", expanded=False):
-        filter_df = filtered_events[filtered_events["event_type"] == "filter_change"]
-        filter_cols = st.columns(3)
-        filter_tables = [
-            ("Categories", "selected_categories"),
-            ("Collections", "selected_collections"),
-            ("Colors", "selected_colors"),
-            ("Products", "selected_products"),
-            ("Panels", "selected_panels"),
-            ("Channels", "selected_channels"),
+        with st.expander("Filter Analytics", expanded=False):
+            filter_df = filtered_events[filtered_events["event_type"] == "filter_change"]
+            filter_cols = st.columns(3)
+            filter_tables = [
+                ("Categories", "selected_categories"),
+                ("Collections", "selected_collections"),
+                ("Colors", "selected_colors"),
+                ("Products", "selected_products"),
+                ("Panels", "selected_panels"),
+                ("Channels", "selected_channels"),
+            ]
+            for idx, (label, column) in enumerate(filter_tables):
+                with filter_cols[idx % 3]:
+                    st.markdown(f"**{label}**")
+                    st.dataframe(clean_value_counts(explode_logged_values(filter_df, column), label.lower()), use_container_width=True, hide_index=True)
+
+        with st.expander("Event Type Breakdown", expanded=False):
+            st.dataframe(clean_value_counts(event_col("event_type"), "event_type"), use_container_width=True, hide_index=True)
+
+        visible_columns = [
+            c for c in [
+                "created_at", "username", "role", "event_type", "query", "part_number", "count", "format",
+                "selected_channels", "selected_categories", "selected_collections", "selected_products",
+                "selected_panels", "selected_colors", "enabled", "direction", "image_index", "link_text", "url"
+            ]
+            if c in filtered_events.columns
         ]
-        for idx, (label, column) in enumerate(filter_tables):
-            with filter_cols[idx % 3]:
-                st.markdown(f"**{label}**")
-                st.dataframe(clean_value_counts(explode_logged_values(filter_df, column), label.lower()), use_container_width=True, hide_index=True)
+        with st.expander("Advanced: Raw Events", expanded=False):
+            st.download_button(
+                "Download Filtered Log CSV",
+                data=filtered_events[visible_columns].to_csv(index=False).encode("utf-8"),
+                file_name="northcape_activity_log.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+            st.dataframe(filtered_events[visible_columns], use_container_width=True, hide_index=True)
 
-    with st.expander("Event Type Breakdown", expanded=False):
-        st.dataframe(clean_value_counts(event_col("event_type"), "event_type"), use_container_width=True, hide_index=True)
+    def _render_data_health():
+        """Catalogue audit — surfaces missing data, stale thumbnails, dead links, sync mismatches."""
+        st.caption("Catalogue audit. Use this to spot bugs before they reach the cards.")
+        base_dir   = os.path.dirname(os.path.abspath(__file__))
+        cat_path   = os.path.join(base_dir, "data", "catalogue.json")
+        thumb_dir  = os.path.join(base_dir, "static", "thumbnails")
+        try:
+            with open(cat_path, encoding="utf-8") as _f:
+                cat_data = json.load(_f)
+        except Exception as _e:
+            st.error(f"Could not load catalogue.json: {_e}")
+            return
 
-    visible_columns = [
-        c for c in [
-            "created_at", "username", "role", "event_type", "query", "part_number", "count", "format",
-            "selected_channels", "selected_categories", "selected_collections", "selected_products",
-            "selected_panels", "selected_colors", "enabled", "direction", "image_index", "link_text", "url"
-        ]
-        if c in filtered_events.columns
-    ]
-    with st.expander("Advanced: Raw Events", expanded=False):
-        st.download_button(
-            "Download Filtered Log CSV",
-            data=filtered_events[visible_columns].to_csv(index=False).encode("utf-8"),
-            file_name="northcape_activity_log.csv",
-            mime="text/csv",
-            use_container_width=True,
-        )
-        st.dataframe(filtered_events[visible_columns], use_container_width=True, hide_index=True)
+        st.metric("Total products", f"{len(cat_data):,}")
+        st.divider()
+
+        health_tabs = st.tabs([
+            "📷 Missing Images",
+            "🎨 Missing Color / Link",
+            "⏰ Stale Thumbnails",
+            "💀 Dead Dropbox Links",
+            "♊ Duplicate Part Numbers",
+            "❓ Excel vs Catalogue",
+        ])
+
+        # --- 1. Missing images ----------------------------------------------
+        with health_tabs[0]:
+            under5 = [p for p in cat_data if len(p.get("Image_List", [])) < 5]
+            zero   = [p for p in cat_data if len(p.get("Image_List", [])) == 0]
+            c1, c2 = st.columns(2)
+            c1.metric("Products with < 5 images", f"{len(under5):,}")
+            c2.metric("Products with 0 images",   f"{len(zero):,}")
+            if under5:
+                _df = pd.DataFrame([{
+                    "Part Number": p.get("Part Number", ""),
+                    "Collection":  p.get("Collection", ""),
+                    "Category":    p.get("Category", ""),
+                    "Color":       p.get("Color", ""),
+                    "Image Count": len(p.get("Image_List", [])),
+                } for p in under5]).sort_values("Image Count")
+                st.dataframe(_df, use_container_width=True, hide_index=True)
+
+        # --- 2. Missing Color / Color_Link ----------------------------------
+        with health_tabs[1]:
+            no_color = [p for p in cat_data if not str(p.get("Color") or "").strip()]
+            no_link  = [p for p in cat_data if not str(p.get("Color_Link") or "").strip()]
+            c1, c2 = st.columns(2)
+            c1.metric("Missing Color",      f"{len(no_color):,}")
+            c2.metric("Missing Color_Link", f"{len(no_link):,}")
+            problem_pns = {p.get("Part Number") for p in (no_color + no_link)}
+            if problem_pns:
+                _df = pd.DataFrame([{
+                    "Part Number": p.get("Part Number", ""),
+                    "Collection":  p.get("Collection", ""),
+                    "Category":    p.get("Category", ""),
+                    "Color":       p.get("Color", "") or "⚠️ MISSING",
+                    "Color_Link":  "✓" if str(p.get("Color_Link") or "").strip() else "⚠️ MISSING",
+                } for p in cat_data if p.get("Part Number") in problem_pns])
+                st.dataframe(_df, use_container_width=True, hide_index=True)
+
+        # --- 3. Stale thumbnails (file mtime < Excel Last Modified) ---------
+        with health_tabs[2]:
+            st.caption("Compares each thumbnail's modification time on disk against the product's Last Modified date from Excel.")
+            def _parse_lm_dt(s):
+                s = str(s or "").strip()
+                for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+                    try: return datetime.strptime(s, fmt).timestamp()
+                    except ValueError: pass
+                return None
+
+            stale_rows = []
+            for p in cat_data:
+                lm_ts = _parse_lm_dt(p.get("Last Modified", ""))
+                il    = p.get("Image_List", [])
+                if not lm_ts or not il: continue
+                stale_count = 0
+                for path in il:
+                    fpath = os.path.join(thumb_dir, os.path.basename(path))
+                    if os.path.exists(fpath) and os.path.getmtime(fpath) < lm_ts:
+                        stale_count += 1
+                if stale_count:
+                    stale_rows.append({
+                        "Part Number":     p.get("Part Number", ""),
+                        "Collection":      p.get("Collection", ""),
+                        "Color":           p.get("Color", ""),
+                        "Last Modified":   p.get("Last Modified", ""),
+                        "Stale Thumbs":    stale_count,
+                        "Total Thumbs":    len(il),
+                    })
+            st.metric("Products with stale thumbnails", f"{len(stale_rows):,}")
+            if stale_rows:
+                _df = pd.DataFrame(stale_rows).sort_values("Stale Thumbs", ascending=False)
+                st.dataframe(_df, use_container_width=True, hide_index=True)
+
+        # --- 4. Dead Dropbox links (on-demand) ------------------------------
+        with health_tabs[3]:
+            st.caption("HTTP GET each product's first Wayfair image URL. ⚠️ Slow — runs only when you click Run.")
+            limit = st.slider("Max products to test", 50, 2000, 200, step=50, key="dead_link_limit")
+            if st.button("Run dead-link check", key="run_dead_check"):
+                import requests
+                progress = st.progress(0.0)
+                status   = st.empty()
+                dead = []
+                products_with_wf = [p for p in cat_data if str(p.get("Wayfair Image 1", "") or "").startswith("http")][:limit]
+                total = len(products_with_wf)
+                for i, p in enumerate(products_with_wf):
+                    url = p.get("Wayfair Image 1", "")
+                    try:
+                        raw = url.replace("dl=0", "raw=1").replace("dl=1", "raw=1")
+                        r = requests.get(raw, timeout=10, stream=True)
+                        ct = r.headers.get("Content-Type", "")
+                        if r.status_code != 200 or "image" not in ct:
+                            dead.append({
+                                "Part Number": p.get("Part Number", ""),
+                                "Color":       p.get("Color", ""),
+                                "Status":      f"{r.status_code} | {ct[:30]}",
+                                "URL":         url[:90],
+                            })
+                        r.close()
+                    except Exception as e:
+                        dead.append({
+                            "Part Number": p.get("Part Number", ""),
+                            "Color":       p.get("Color", ""),
+                            "Status":      f"ERROR: {str(e)[:40]}",
+                            "URL":         url[:90],
+                        })
+                    if (i + 1) % 10 == 0 or i == total - 1:
+                        progress.progress((i + 1) / total)
+                        status.caption(f"Tested {i + 1}/{total} | Dead found: {len(dead)}")
+                st.success(f"Done. Tested {total} products, found {len(dead)} dead links.")
+                if dead:
+                    st.dataframe(pd.DataFrame(dead), use_container_width=True, hide_index=True)
+
+        # --- 5. Duplicate Part Numbers --------------------------------------
+        with health_tabs[4]:
+            from collections import Counter as _Counter
+            pn_counts = _Counter(p.get("Part Number", "") for p in cat_data)
+            dups = {pn: n for pn, n in pn_counts.items() if n > 1 and pn}
+            st.metric("Duplicate Part Numbers", f"{len(dups):,}")
+            if dups:
+                _df = pd.DataFrame([{"Part Number": pn, "Count": n}
+                                    for pn, n in sorted(dups.items(), key=lambda kv: -kv[1])])
+                st.dataframe(_df, use_container_width=True, hide_index=True)
+
+        # --- 6. Excel rows not in catalogue ---------------------------------
+        with health_tabs[5]:
+            st.caption("Reads the latest Excel files and lists Part Numbers present there but missing from catalogue.json.")
+            default_excels = [
+                r"C:\Users\Lenovo\Master Image Library Dropbox\Master Image Library\NorthCape Library - Master Excel - Accent Pillow - Jun 11, 2026.xlsx",
+                r"C:\Users\Lenovo\Master Image Library Dropbox\Master Image Library\NorthCape Library - Master Excel - Cushions - Jun 09, 2026.xlsx",
+                r"C:\Users\Lenovo\Master Image Library Dropbox\Master Image Library\NorthCape Library - Master Excel - Furniture - Jun 09, 2026.xlsx",
+            ]
+            for ex in default_excels:
+                st.caption(("✓ " if os.path.exists(ex) else "❌ ") + os.path.basename(ex))
+            if st.button("Check Excel vs Catalogue", key="run_excel_check"):
+                try:
+                    import openpyxl
+                except ImportError:
+                    st.error("openpyxl not installed")
+                    return
+                cat_pns = {p.get("Part Number", "") for p in cat_data}
+                missing = []
+                for ex in default_excels:
+                    if not os.path.exists(ex):
+                        continue
+                    try:
+                        wb = openpyxl.load_workbook(ex, read_only=True, data_only=True)
+                        for sheet in wb.sheetnames:
+                            ws = wb[sheet]
+                            headers = [c.value for c in next(ws.iter_rows())]
+                            if "Part Number" not in headers: continue
+                            pn_idx = headers.index("Part Number")
+                            for row in ws.iter_rows(min_row=2, values_only=True):
+                                pn = row[pn_idx] if pn_idx < len(row) else None
+                                if pn and pn not in cat_pns:
+                                    missing.append({
+                                        "Part Number": pn,
+                                        "Excel":       os.path.basename(ex),
+                                        "Sheet":       sheet,
+                                    })
+                    except Exception as e:
+                        st.warning(f"Failed reading {os.path.basename(ex)}: {e}")
+                st.metric("Excel rows missing from catalogue", f"{len(missing):,}")
+                if missing:
+                    st.dataframe(pd.DataFrame(missing), use_container_width=True, hide_index=True)
+
+    main_tabs = st.tabs(["📊 Usage Analytics", "🩺 Data Health"])
+    with main_tabs[0]:
+        _render_analytics()
+    with main_tabs[1]:
+        _render_data_health()
 
 def login_page():
     # Native Static Serving with Cache-Busting: 
@@ -2255,6 +2448,110 @@ if uploaded_file is not None:
                     log_event("download_enriched_excel", count=found, format="xlsx", not_found=len(not_found_pns))
     except Exception as e:
         st.sidebar.error(f"Upload Error: {str(e)}")
+
+# Last Modified filter — kept hidden under an expander so it's not in the main
+# filter dropdowns. Three modes: quick preset, custom range, or specific dates.
+def _parse_lm(d):
+    s = str(d or "").strip()
+    if not s:
+        return None
+    for fmt in ("%d-%m-%Y", "%Y-%m-%d", "%d/%m/%Y", "%m/%d/%Y"):
+        try:
+            return datetime.strptime(s, fmt)
+        except ValueError:
+            continue
+    return None
+
+# Build options sorted newest-first; preserve the original string form for matching
+_lm_counts = df["Last Modified"].astype(str).str.strip().replace("nan", "").value_counts().to_dict()
+_lm_pairs = []
+_seen_lm = set()
+for _raw in df["Last Modified"].dropna().astype(str):
+    _raw = _raw.strip()
+    if not _raw or _raw in _seen_lm:
+        continue
+    _seen_lm.add(_raw)
+    _lm_pairs.append((_parse_lm(_raw), _raw))
+_lm_pairs.sort(key=lambda t: (t[0] is None, -(t[0].timestamp() if t[0] else 0)))
+_lm_options = [raw for _, raw in _lm_pairs]
+_lm_valid_dates = [dt.date() for dt, _ in _lm_pairs if dt is not None]
+
+selected_lm_dates = []  # list of raw date strings used for filtering
+
+with st.sidebar.expander("📅 Last Modified", expanded=False):
+    lm_mode = st.radio(
+        "Mode",
+        ["Quick preset", "Date range", "Specific dates"],
+        index=0,
+        key="lm_mode",
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    if lm_mode == "Quick preset":
+        today_d = datetime.today().date()
+        preset = st.selectbox(
+            "Preset",
+            ["— None —", "Today", "Last 7 days", "Last 30 days", "This month"],
+            index=0,
+            key="lm_preset",
+            label_visibility="collapsed"
+        )
+        if preset == "Today":
+            start_d = end_d = today_d
+        elif preset == "Last 7 days":
+            start_d = today_d - timedelta(days=6); end_d = today_d
+        elif preset == "Last 30 days":
+            start_d = today_d - timedelta(days=29); end_d = today_d
+        elif preset == "This month":
+            start_d = today_d.replace(day=1); end_d = today_d
+        else:
+            start_d = end_d = None
+        if start_d and end_d:
+            for raw in _lm_options:
+                dt = _parse_lm(raw)
+                if dt and start_d <= dt.date() <= end_d:
+                    selected_lm_dates.append(raw)
+
+    elif lm_mode == "Date range":
+        if _lm_valid_dates:
+            _min_d, _max_d = min(_lm_valid_dates), max(_lm_valid_dates)
+            date_range = st.date_input(
+                "Range",
+                value=(_min_d, _max_d),
+                min_value=_min_d,
+                max_value=_max_d,
+                key="lm_range",
+                label_visibility="collapsed"
+            )
+            if isinstance(date_range, tuple) and len(date_range) == 2:
+                start_d, end_d = date_range
+            else:
+                start_d = end_d = date_range
+            for raw in _lm_options:
+                dt = _parse_lm(raw)
+                if dt and start_d <= dt.date() <= end_d:
+                    selected_lm_dates.append(raw)
+        else:
+            st.caption("No valid dates available.")
+
+    else:  # Specific dates with counts shown next to each
+        _label_to_raw = {f"{raw}  ({_lm_counts.get(raw, 0):,})": raw for raw in _lm_options}
+        chosen_labels = st.multiselect(
+            "Pick dates",
+            options=list(_label_to_raw.keys()),
+            default=[],
+            key="lm_specific",
+            label_visibility="collapsed",
+            help="Count in parentheses = number of products with that Last Modified date"
+        )
+        selected_lm_dates = [_label_to_raw[lbl] for lbl in chosen_labels]
+
+    if selected_lm_dates:
+        st.caption(f"✓ Matching {sum(_lm_counts.get(d, 0) for d in selected_lm_dates):,} products across {len(selected_lm_dates)} date(s)")
+
+if selected_lm_dates:
+    filtered_df = filtered_df[filtered_df["Last Modified"].astype(str).isin(selected_lm_dates)]
 
 # Main Content - Premium Header
 # Anchor to target the exact columns block
