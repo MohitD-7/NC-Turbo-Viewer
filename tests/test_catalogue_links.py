@@ -11,6 +11,7 @@ Checks for:
 import json
 import pytest
 from pathlib import Path
+from urllib.parse import urlparse, parse_qs
 
 # Paths
 CATALOGUE_PATH = Path(__file__).parent.parent / "data" / "catalogue.json"
@@ -109,16 +110,21 @@ def test_no_malformed_dropbox_urls(catalogue):
                                    for m in malformed[:10])
 
 
+def _has_dl_param(url):
+    """Check for a 'dl' query parameter regardless of whether it's the
+    first param (?dl=1) or a later one (?rlkey=xxx&dl=1)."""
+    return "dl" in parse_qs(urlparse(url).query)
+
+
 def test_dropbox_urls_have_dl_parameter(catalogue):
-    """Dropbox URLs should include ?dl=0 or ?dl=1 parameter."""
+    """Dropbox URLs should include a dl=0 or dl=1 query parameter."""
     missing_dl = []
     for item in catalogue:
-        # Check image columns
         for col in ALL_COLS:
             url = item.get(col, "")
             if url and isinstance(url, str):
                 url = url.strip()
-                if url.startswith("https://www.dropbox.com/") and "?dl=" not in url:
+                if url.startswith("https://www.dropbox.com/") and not _has_dl_param(url):
                     missing_dl.append({
                         "part_number": item.get("Part Number"),
                         "collection": item.get("Collection"),
@@ -126,26 +132,40 @@ def test_dropbox_urls_have_dl_parameter(catalogue):
                     })
                     break
 
-        # Check Color_Link
         cl = item.get("Color_Link", "")
         if cl and isinstance(cl, str):
             cl = cl.strip()
-            if cl.startswith("https://www.dropbox.com/") and "?dl=" not in cl:
+            if cl.startswith("https://www.dropbox.com/") and not _has_dl_param(cl):
                 missing_dl.append({
                     "part_number": item.get("Part Number"),
                     "collection": item.get("Collection"),
                     "column": "Color_Link",
                 })
 
-    if missing_dl:
-        # Group by collection
-        by_coll = {}
-        for item in missing_dl:
-            coll = item["collection"]
-            by_coll[coll] = by_coll.get(coll, 0) + 1
+    assert not missing_dl, f"Found {len(missing_dl)} Dropbox URLs missing a dl= parameter (first 10):\n" + \
+                           "\n".join(f"  {m['part_number']} ({m['collection']}): {m['column']}"
+                                    for m in missing_dl[:10])
 
-        summary = "\n".join(f"  {c}: {cnt} items" for c, cnt in sorted(by_coll.items(), key=lambda x: -x[1])[:10])
-        pytest.skip(f"Found {len(missing_dl)} Dropbox URLs missing ?dl= parameter - run fix_dropbox_dl_params.py:\n{summary}")
+
+def test_no_double_query_string_urls(catalogue):
+    """URLs must not contain more than one '?' -- a second one means a dl=
+    param (or similar) was appended on top of an already-complete query
+    string, producing an invalid URL like '...&dl=1?dl=1'."""
+    malformed = []
+    for item in catalogue:
+        for col in ALL_COLS + ["Color_Link"]:
+            url = item.get(col, "")
+            if url and isinstance(url, str) and url.count("?") > 1:
+                malformed.append({
+                    "part_number": item.get("Part Number"),
+                    "collection": item.get("Collection"),
+                    "column": col,
+                    "url": url[:100],
+                })
+
+    assert not malformed, f"Found {len(malformed)} URLs with a duplicated query string (first 10):\n" + \
+                          "\n".join(f"  {m['part_number']} ({m['collection']}) {m['column']}: {m['url']}"
+                                   for m in malformed[:10])
 
 
 def test_image_count_matches_actual_urls(catalogue):

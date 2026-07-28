@@ -1,12 +1,15 @@
 """
 fix_dropbox_dl_params.py
-Fix Dropbox URLs missing the ?dl= parameter.
-Adds ?dl=1 to all dropbox.com URLs that don't already have it.
+Fix Dropbox URLs missing a dl= query parameter.
+Appends "?dl=1" only to URLs with no query string at all, and "&dl=1" to
+URLs that already have a query string (e.g. "...?rlkey=xxx") but no dl
+param. Uses proper query-param parsing so URLs that already have dl=
+embedded (as "&dl=1" after other params) are correctly left alone.
 """
 
 import json
-import os
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs
 
 CATALOGUE_PATH = "data/catalogue.json"
 NC_COLS  = [f"Northcape Image {i}" for i in range(1, 16)]
@@ -14,6 +17,13 @@ BY_COLS  = [f"Overstock Image {i}" for i in range(1, 16)]
 WF_COLS  = [f"Wayfair Image {i}" for i in range(1, 16)]
 HD_COLS  = [f"Home Depot Image {i}" for i in range(1, 16)]
 ALL_COLS = NC_COLS + BY_COLS + WF_COLS + HD_COLS
+
+
+def add_dl_param(url):
+    if "dl" in parse_qs(urlparse(url).query):
+        return url
+    sep = "&" if "?" in url else "?"
+    return f"{url}{sep}dl=1"
 
 print("Loading catalogue...", flush=True)
 with open(CATALOGUE_PATH, encoding="utf-8") as f:
@@ -29,19 +39,23 @@ for item in cat:
         url = item.get(col, "")
         if url and isinstance(url, str):
             url = url.strip()
-            if url.startswith("https://www.dropbox.com/") and "?dl=" not in url:
-                item[col] = f"{url}?dl=1"
-                fixed_count += 1
-                stats["image_cols"] += 1
+            if url.startswith("https://www.dropbox.com/"):
+                fixed = add_dl_param(url)
+                if fixed != url:
+                    item[col] = fixed
+                    fixed_count += 1
+                    stats["image_cols"] += 1
 
     # Fix Color_Link
     cl = item.get("Color_Link", "")
     if cl and isinstance(cl, str):
         cl = cl.strip()
-        if cl.startswith("https://www.dropbox.com/") and "?dl=" not in cl:
-            item["Color_Link"] = f"{cl}?dl=1"
-            fixed_count += 1
-            stats["color_links"] += 1
+        if cl.startswith("https://www.dropbox.com/"):
+            fixed = add_dl_param(cl)
+            if fixed != cl:
+                item["Color_Link"] = fixed
+                fixed_count += 1
+                stats["color_links"] += 1
 
 # Backup
 ts = datetime.now().strftime("%Y%m%d_%H%M%S")
