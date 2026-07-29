@@ -147,6 +147,26 @@ def test_dropbox_urls_have_dl_parameter(catalogue):
                                     for m in missing_dl[:10])
 
 
+def test_no_missing_color_link(catalogue):
+    """Items with a Color value should have a Color_Link (the Dropbox
+    folder link shown under the color swatch in the viewer). An empty
+    Color_Link renders as a dead/missing link in the UI."""
+    missing = []
+    for item in catalogue:
+        color = str(item.get("Color") or "").strip()
+        color_link = str(item.get("Color_Link") or "").strip()
+        if color and not color_link:
+            missing.append({
+                "part_number": item.get("Part Number"),
+                "collection": item.get("Collection"),
+                "color": color,
+            })
+
+    assert not missing, f"Found {len(missing)} items with a Color but no Color_Link (first 10):\n" + \
+                        "\n".join(f"  {m['part_number']} ({m['collection']}): {m['color']}"
+                                 for m in missing[:10])
+
+
 def test_no_double_query_string_urls(catalogue):
     """URLs must not contain more than one '?' -- a second one means a dl=
     param (or similar) was appended on top of an already-complete query
