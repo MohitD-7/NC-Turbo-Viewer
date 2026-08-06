@@ -36,6 +36,24 @@ def test_catalogue_not_empty(catalogue):
     assert len(catalogue) > 0, "Catalogue is empty"
 
 
+def test_no_duplicate_part_numbers(catalogue):
+    """Two catalogue rows with Part Numbers that only differ by leading/
+    trailing whitespace render as two 'cards' for the same physical SKU
+    in the viewer, and the whitespace-padded one silently escapes any
+    Excel sync that matches on the exact Part Number string."""
+    from collections import defaultdict
+
+    by_stripped = defaultdict(set)
+    for item in catalogue:
+        pn = item.get("Part Number", "")
+        if pn:
+            by_stripped[pn.strip()].add(pn)
+
+    dupes = {k: v for k, v in by_stripped.items() if len(v) > 1}
+    assert not dupes, f"Found {len(dupes)} Part Numbers with whitespace-variant duplicates:\n" + \
+                      "\n".join(f"  {k}: {[repr(v) for v in variants]}" for k, variants in list(dupes.items())[:10])
+
+
 def test_no_missing_local_thumbnail_files(catalogue):
     """All items with Image_List should have the referenced files on disk."""
     missing = []
