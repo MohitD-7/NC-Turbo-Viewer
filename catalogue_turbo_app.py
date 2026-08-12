@@ -252,6 +252,7 @@ def render_tech_dashboard():
             filter_cols = st.columns(3)
             filter_tables = [
                 ("Categories", "selected_categories"),
+                ("Cushion Types", "selected_types"),
                 ("Collections", "selected_collections"),
                 ("Colors", "selected_colors"),
                 ("Products", "selected_products"),
@@ -269,7 +270,7 @@ def render_tech_dashboard():
         visible_columns = [
             c for c in [
                 "created_at", "username", "role", "event_type", "query", "part_number", "count", "format",
-                "selected_channels", "selected_categories", "selected_collections", "selected_products",
+                "selected_channels", "selected_categories", "selected_types", "selected_collections", "selected_products",
                 "selected_panels", "selected_colors", "enabled", "direction", "image_index", "link_text", "url"
             ]
             if c in filtered_events.columns
@@ -1647,6 +1648,29 @@ st.markdown("""
         font-weight: 700;
         text-align: right;
     }
+
+    .cushion-type-row {
+        align-items: flex-start;
+        gap: 0.75rem;
+    }
+
+    .cushion-type-row .detail-label {
+        flex: 0 0 auto;
+    }
+
+    .cushion-type-value {
+        flex: 1 1 0;
+        min-width: 0;
+        max-width: 62%;
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: normal;
+        line-height: 1.25;
+    }
+
+    .cushion-type-line {
+        white-space: nowrap;
+    }
     
     .color-link {
         color: #2563eb;
@@ -2130,6 +2154,21 @@ category_options = [o for o in get_options("Category", df) if o != "Cushion"]
 selected_categories = st.sidebar.multiselect("Category", category_options[1:], help="Select product categories")
 filtered_df = df[df["Category"].isin(selected_categories)] if selected_categories else df
 
+# Cushion-specific type filter. Keep it between Category and Collections so
+# collection choices cascade from the selected cushion classification.
+selected_types = []
+if not selected_categories or "Cushions" in selected_categories:
+    cushion_type_df = filtered_df[filtered_df["Category"] == "Cushions"]
+    cushion_type_options = get_options("Type", cushion_type_df)
+    if len(cushion_type_options) > 1:
+        selected_types = st.sidebar.multiselect(
+            "Cushion Type",
+            cushion_type_options[1:],
+            help="Filter cushions by their product classification",
+        )
+        if selected_types:
+            filtered_df = filtered_df[filtered_df["Type"].isin(selected_types)]
+
 # The original 'Collection Type' contains the sheet/series names (2001, 6400, etc.)
 # Series dropdown removed as requested by the client
 
@@ -2169,7 +2208,7 @@ filter_state = {
     "selected_channels": selected_channels,
     "channel_logic": channel_logic,
     "selected_categories": selected_categories,
-    "selected_types": locals().get("selected_types", []),
+    "selected_types": selected_types,
     "selected_collections": selected_collections,
     "selected_arms": locals().get("selected_arms", []),
     "selected_products": locals().get("selected_products", []),
@@ -2853,6 +2892,13 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
     # Color is a product-type (not a real color) when it matches these keywords
     is_product_type_color = any(k in color_val_lower for k in _PRODUCT_TYPE_KEYWORDS)
 
+    # Type is otherwise treated as a technical field, but for cushion cards it
+    # is the equivalent of Furniture's Product label and is fully populated.
+    category_val_lower = str(item.get('Category', '')).strip().lower()
+    cushion_type = get_val("Type")
+    is_cushion_card = category_val_lower in ("cushion", "cushions")
+    cushion_type_inserted = False
+
     for key in item.keys():
         if key not in TECHNICAL_FIELDS and not key.startswith('_') and not any(x in key for x in ["Northcape Image", "Overstock Image", "Wayfair Image", "Home Depot Image"]):
             # Hide Color when it's a product-type (e.g. "Corner End Table", "Dining Chair")
@@ -2861,10 +2907,23 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
             val = get_val(key)
             if val:
                 display_fields.append((key, val))
+                # Keep Cushion Type directly beneath Color on cushion cards.
+                if key == "Color" and is_cushion_card and cushion_type:
+                    display_fields.append(("Cushion Type", cushion_type))
+                    cushion_type_inserted = True
+
+    # Defensive fallback for a cushion record that has Type but no Color.
+    if is_cushion_card and cushion_type and not cushion_type_inserted:
+        display_fields.append(("Cushion Type", cushion_type))
 
     def row_html(label, val):
         if not val: return ""
         final_val = val
+
+        # Give the longest cushion classification a deliberate two-line layout
+        # while keeping "Deep Seating" together on the second line.
+        if label == "Cushion Type" and str(val).strip() == "Chair Cushion - Deep Seating":
+            final_val = 'Chair Cushion<br><span class="cushion-type-line">Deep Seating</span>'
 
         # Check if this is a blacklisted item (has Color_Link but empty Color field)
         is_blacklisted = pd.notna(item.get('Color_Link')) and (not item.get('Color') or str(item.get('Color')).strip() == "")
@@ -2891,7 +2950,9 @@ for i, (_, item) in enumerate(paged_data.iterrows()):
             if is_blacklisted and label == "Arm/Table-Top" and pd.notna(item.get('Color_Link')):
                 final_val = f'<a href="{item["Color_Link"]}" target="_blank" class="color-link">{final_val}</a>'
 
-        return f'<div class="detail-row"><span class="detail-label">{label}</span><span class="detail-value">{final_val}</span></div>'
+        row_class = "detail-row cushion-type-row" if label == "Cushion Type" else "detail-row"
+        value_class = "detail-value cushion-type-value" if label == "Cushion Type" else "detail-value"
+        return f'<div class="{row_class}"><span class="detail-label">{label}</span><span class="{value_class}">{final_val}</span></div>'
 
     # Image Count Badges Logic (dealers only see NC)
     image_stats_html = ""
